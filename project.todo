@@ -1,0 +1,150 @@
+TinyPreprocessor Project Plan:
+
+Phase 1 - Project Setup:
+  ☐ Create TinyPreprocessor.sln at workspace root
+  ☐ Create src/TinyPreprocessor/TinyPreprocessor.csproj (net8.0, nullable enabled)
+  ☐ Add PackageReference to Graffs 0.1.0
+  ☐ Create tests/TinyPreprocessor.Tests/TinyPreprocessor.Tests.csproj
+  ☐ Add xUnit and Moq package references to test project
+  ☐ Add project reference from test project to main library
+
+Phase 2 - Core Abstractions (src/TinyPreprocessor/Core/):
+  ☐ Create ResourceId readonly struct
+    ☐ Wrap string Path property
+    ☐ Implement IEquatable<ResourceId>
+    ☐ Override GetHashCode() and Equals()
+    ☐ Add implicit/explicit conversion operators
+  ☐ Create IResource interface
+    ☐ ResourceId Id property
+    ☐ ReadOnlyMemory<char> Content property
+    ☐ IReadOnlyDictionary<string, object>? Metadata property
+  ☐ Create Resource sealed record implementing IResource
+  ☐ Create IDirective marker interface
+    ☐ Range Location property
+  ☐ Create IResourceResolver interface
+    ☐ ValueTask<ResourceResolutionResult> ResolveAsync(string reference, IResource? relativeTo, CancellationToken ct)
+  ☐ Create ResourceResolutionResult record
+    ☐ IResource? Resource property
+    ☐ IPreprocessorDiagnostic? Error property
+  ☐ Create IDirectiveParser<TDirective> interface
+    ☐ IEnumerable<TDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId) where TDirective : IDirective
+
+Phase 3 - Diagnostics System (src/TinyPreprocessor/Diagnostics/):
+  ☐ Create DiagnosticSeverity enum (Info = 0, Warning = 1, Error = 2)
+  ☐ Create IPreprocessorDiagnostic interface
+    ☐ DiagnosticSeverity Severity property
+    ☐ string Code property
+    ☐ string Message property
+    ☐ ResourceId? Resource property
+    ☐ Range? Location property
+  ☐ Create CircularDependencyDiagnostic sealed record
+    ☐ Implement IPreprocessorDiagnostic
+    ☐ IReadOnlyList<ResourceId> Cycle property
+    ☐ Code = "TPP0001"
+  ☐ Create ResolutionFailedDiagnostic sealed record
+    ☐ Implement IPreprocessorDiagnostic
+    ☐ string Reference property
+    ☐ Code = "TPP0002"
+  ☐ Create ParseErrorDiagnostic sealed record
+    ☐ Implement IPreprocessorDiagnostic
+    ☐ Code = "TPP0003"
+  ☐ Create DiagnosticCollection sealed class
+    ☐ Thread-safe with lock
+    ☐ void Add(IPreprocessorDiagnostic) method
+    ☐ bool HasErrors property
+    ☐ Implement IReadOnlyCollection<IPreprocessorDiagnostic>
+
+Phase 4 - Dependency Graph Layer (src/TinyPreprocessor/Graph/):
+  ☐ Create ResourceDependencyGraph sealed class
+    ☐ Internal DependencyGraphBuilder<ResourceId> field
+    ☐ void AddResource(ResourceId id) method
+    ☐ void AddDependency(ResourceId dependent, ResourceId dependency) method
+    ☐ IReadOnlyList<IReadOnlyList<ResourceId>> DetectCycles() method using CycleDetection.FindAllCycles()
+    ☐ IReadOnlyList<ResourceId> GetProcessingOrder() method using TopologicalSort.KahnSort()
+
+Phase 5 - Source Mapping System (src/TinyPreprocessor/SourceMaps/):
+  ☐ Create SourcePosition readonly struct
+    ☐ int Line property (0-based)
+    ☐ int Column property (0-based)
+    ☐ Implement IComparable<SourcePosition>
+    ☐ Implement IEquatable<SourcePosition>
+  ☐ Create SourceSpan readonly struct
+    ☐ SourcePosition Start property
+    ☐ SourcePosition End property
+  ☐ Create SourceMapping sealed record
+    ☐ SourceSpan GeneratedSpan property
+    ☐ ResourceId OriginalResource property
+    ☐ SourceSpan OriginalSpan property
+  ☐ Create SourceLocation sealed record
+    ☐ ResourceId Resource property
+    ☐ SourcePosition OriginalPosition property
+  ☐ Create SourceMap sealed class
+    ☐ IReadOnlyList<SourceMapping> Mappings property (sorted by generated position)
+    ☐ SourceLocation? Query(SourcePosition generatedPosition) method with binary search
+  ☐ Create SourceMapBuilder sealed class
+    ☐ Internal List<SourceMapping> for accumulation
+    ☐ void AddMapping(SourceMapping) method
+    ☐ void AddSegment(ResourceId resource, SourceSpan generated, SourceSpan original) method
+    ☐ SourceMap Build() method (sorts and returns immutable)
+
+Phase 6 - Merge System (src/TinyPreprocessor/Merging/):
+  ☐ Create ResolvedResource sealed record
+    ☐ IResource Resource property
+    ☐ IReadOnlyList<IDirective> Directives property
+  ☐ Create MergeContext sealed class
+    ☐ SourceMapBuilder SourceMapBuilder property
+    ☐ DiagnosticCollection Diagnostics property
+    ☐ IReadOnlyDictionary<ResourceId, IResource> ResolvedCache property
+  ☐ Create IMergeStrategy<TContext> interface
+    ☐ ReadOnlyMemory<char> Merge(IReadOnlyList<ResolvedResource> orderedResources, TContext userContext, MergeContext context)
+  ☐ Create ConcatenatingMergeStrategy<TContext> sealed class
+    ☐ Implement IMergeStrategy<TContext>
+    ☐ Iterate resources in topological order
+    ☐ Strip directive ranges from content
+    ☐ Append to StringBuilder
+    ☐ Record mappings via MergeContext.SourceMapBuilder
+
+Phase 7 - Main Orchestrator (src/TinyPreprocessor/):
+  ☐ Create PreprocessorOptions sealed record
+    ☐ bool DeduplicateIncludes = true
+    ☐ int MaxIncludeDepth = 100
+  ☐ Create PreprocessResult sealed record
+    ☐ ReadOnlyMemory<char> Content property
+    ☐ SourceMap SourceMap property
+    ☐ DiagnosticCollection Diagnostics property
+    ☐ bool Success => !Diagnostics.HasErrors
+  ☐ Create Preprocessor<TDirective, TContext> sealed class
+    ☐ Constructor accepting IDirectiveParser<TDirective>, IResourceResolver, IMergeStrategy<TContext>
+    ☐ Internal per-call cache Dictionary<ResourceId, ResolvedResource>
+    ☐ ValueTask<PreprocessResult> ProcessAsync(IResource root, TContext context, PreprocessorOptions? options, CancellationToken ct)
+    ☐ Implement recursive resolution with depth tracking
+    ☐ Implement deduplication logic based on options
+    ☐ Wire up cycle detection → CircularDependencyDiagnostic
+    ☐ Wire up topological sorting
+    ☐ Wire up merge strategy invocation
+    ☐ Build final PreprocessResult
+
+Phase 8 - Unit Tests (tests/TinyPreprocessor.Tests/):
+  ☐ Core tests
+    ☐ ResourceId equality and hashing tests
+    ☐ Resource record tests
+  ☐ Diagnostics tests
+    ☐ DiagnosticCollection thread-safety tests
+    ☐ HasErrors logic tests
+  ☐ Graph tests
+    ☐ Cycle detection with known circular graphs
+    ☐ Topological sort ordering verification
+    ☐ Empty graph edge cases
+  ☐ SourceMap tests
+    ☐ SourcePosition comparison tests
+    ☐ SourceMapBuilder accumulation tests
+    ☐ SourceMap.Query binary search tests
+  ☐ Merge tests
+    ☐ ConcatenatingMergeStrategy output verification
+    ☐ Directive stripping tests
+    ☐ Source mapping accuracy tests
+  ☐ Integration tests
+    ☐ Full preprocessing pipeline with mock resolver/parser
+    ☐ Circular dependency handling (continues with diagnostics)
+    ☐ Deduplication behavior
+    ☐ MaxIncludeDepth enforcement
