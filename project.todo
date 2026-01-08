@@ -1,8 +1,17 @@
 TinyPreprocessor Project Plan:
 
 Phase 1 - Project Setup:
-  ☐ Create TinyPreprocessor.sln at workspace root
-  ☐ Create src/TinyPreprocessor/TinyPreprocessor.csproj (net8.0, nullable enabled)
+  Phase 1.1 - Architectural Documentation:
+    ☐ Create docs/ folder at workspace root
+    ☐ Document Core abstractions architecture (ResourceId, IResource, IDirective, IResourceResolver, IDirectiveParser)
+    ☐ Document Diagnostics system architecture (severity levels, diagnostic types, collection)
+    ☐ Document Dependency Graph architecture (Graffs integration, cycle detection, topological sorting)
+    ☐ Document Source Mapping architecture (positions, spans, mappings, query system)
+    ☐ Document Merge System architecture (strategies, context, directive stripping)
+    ☐ Document Preprocessor orchestrator architecture (processing flow, caching, options)
+  Phase 1.2 - Solution Structure:
+    ☐ Create TinyPreprocessor.sln at workspace root
+    ☐ Create src/TinyPreprocessor/TinyPreprocessor.csproj (net8.0, nullable enabled)
   ☐ Add PackageReference to Graffs 0.1.0
   ☐ Create tests/TinyPreprocessor.Tests/TinyPreprocessor.Tests.csproj
   ☐ Add xUnit and Moq package references to test project
