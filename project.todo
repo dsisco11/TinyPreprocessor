@@ -114,24 +114,24 @@ Phase 6 - Merge System (src/TinyPreprocessor/Merging/):
     ✔ Record mappings via MergeContext.SourceMapBuilder @done(26-01-08 20:20)
 
 Phase 7 - Main Orchestrator (src/TinyPreprocessor/):
-  ☐ Create PreprocessorOptions sealed record
-    ☐ bool DeduplicateIncludes = true
-    ☐ int MaxIncludeDepth = 100
-  ☐ Create PreprocessResult sealed record
-    ☐ ReadOnlyMemory<char> Content property
-    ☐ SourceMap SourceMap property
-    ☐ DiagnosticCollection Diagnostics property
-    ☐ bool Success => !Diagnostics.HasErrors
-  ☐ Create Preprocessor<TDirective, TContext> sealed class
-    ☐ Constructor accepting IDirectiveParser<TDirective>, IResourceResolver, IMergeStrategy<TContext>
-    ☐ Internal per-call cache Dictionary<ResourceId, ResolvedResource>
-    ☐ ValueTask<PreprocessResult> ProcessAsync(IResource root, TContext context, PreprocessorOptions? options, CancellationToken ct)
-    ☐ Implement recursive resolution with depth tracking
-    ☐ Implement deduplication logic based on options
-    ☐ Wire up cycle detection → CircularDependencyDiagnostic
-    ☐ Wire up topological sorting
-    ☐ Wire up merge strategy invocation
-    ☐ Build final PreprocessResult
+  ✔ Create PreprocessorOptions sealed record @done(26-01-08 20:25)
+    ✔ bool DeduplicateIncludes = true @done(26-01-08 20:25)
+    ✔ int MaxIncludeDepth = 100 @done(26-01-08 20:25)
+  ✔ Create PreprocessResult sealed record @done(26-01-08 20:25)
+    ✔ ReadOnlyMemory<char> Content property @done(26-01-08 20:25)
+    ✔ SourceMap SourceMap property @done(26-01-08 20:25)
+    ✔ DiagnosticCollection Diagnostics property @done(26-01-08 20:25)
+    ✔ bool Success => !Diagnostics.HasErrors @done(26-01-08 20:25)
+  ✔ Create Preprocessor<TDirective, TContext> sealed class @done(26-01-08 20:25)
+    ✔ Constructor accepting IDirectiveParser<TDirective>, IResourceResolver, IMergeStrategy<TContext> @done(26-01-08 20:25)
+    ✔ Internal per-call cache Dictionary<ResourceId, ResolvedResource> @done(26-01-08 20:25)
+    ✔ ValueTask<PreprocessResult> ProcessAsync(IResource root, TContext context, PreprocessorOptions? options, CancellationToken ct) @done(26-01-08 20:25)
+    ✔ Implement recursive resolution with depth tracking @done(26-01-08 20:25)
+    ✔ Implement deduplication logic based on options @done(26-01-08 20:25)
+    ✔ Wire up cycle detection → CircularDependencyDiagnostic @done(26-01-08 20:25)
+    ✔ Wire up topological sorting @done(26-01-08 20:25)
+    ✔ Wire up merge strategy invocation @done(26-01-08 20:25)
+    ✔ Build final PreprocessResult @done(26-01-08 20:25)
 
 Phase 8 - Unit Tests (tests/TinyPreprocessor.Tests/):
   ☐ Core tests
