@@ -134,26 +134,26 @@ Phase 7 - Main Orchestrator (src/TinyPreprocessor/):
     ✔ Build final PreprocessResult @done(26-01-08 20:25)
 
 Phase 8 - Unit Tests (tests/TinyPreprocessor.Tests/):
-  ☐ Core tests
-    ☐ ResourceId equality and hashing tests
-    ☐ Resource record tests
-  ☐ Diagnostics tests
-    ☐ DiagnosticCollection thread-safety tests
-    ☐ HasErrors logic tests
-  ☐ Graph tests
-    ☐ Cycle detection with known circular graphs
-    ☐ Topological sort ordering verification
-    ☐ Empty graph edge cases
-  ☐ SourceMap tests
-    ☐ SourcePosition comparison tests
-    ☐ SourceMapBuilder accumulation tests
-    ☐ SourceMap.Query binary search tests
-  ☐ Merge tests
-    ☐ ConcatenatingMergeStrategy output verification
-    ☐ Directive stripping tests
-    ☐ Source mapping accuracy tests
-  ☐ Integration tests
-    ☐ Full preprocessing pipeline with mock resolver/parser
-    ☐ Circular dependency handling (continues with diagnostics)
-    ☐ Deduplication behavior
-    ☐ MaxIncludeDepth enforcement
+  ✔ Core tests @done(26-01-08 22:35)
+    ✔ ResourceId equality and hashing tests @done(26-01-08 22:35)
+    ✔ Resource record tests @done(26-01-08 22:35)
+  ✔ Diagnostics tests @done(26-01-08 22:35)
+    ✔ DiagnosticCollection thread-safety tests @done(26-01-08 22:35)
+    ✔ HasErrors logic tests @done(26-01-08 22:35)
+  ✔ Graph tests @done(26-01-08 22:35)
+    ✔ Cycle detection with known circular graphs @done(26-01-08 22:35)
+    ✔ Topological sort ordering verification @done(26-01-08 22:35)
+    ✔ Empty graph edge cases @done(26-01-08 22:35)
+  ✔ SourceMap tests @done(26-01-08 22:35)
+    ✔ SourcePosition comparison tests @done(26-01-08 22:35)
+    ✔ SourceMapBuilder accumulation tests @done(26-01-08 22:35)
+    ✔ SourceMap.Query binary search tests @done(26-01-08 22:35)
+  ✔ Merge tests @done(26-01-08 22:35)
+    ✔ ConcatenatingMergeStrategy output verification @done(26-01-08 22:35)
+    ✔ Directive stripping tests @done(26-01-08 22:35)
+    ✔ Source mapping accuracy tests @done(26-01-08 22:35)
+  ✔ Integration tests @done(26-01-08 22:35)
+    ✔ Full preprocessing pipeline with mock resolver/parser @done(26-01-08 22:35)
+    ✔ Circular dependency handling (continues with diagnostics) @done(26-01-08 22:35)
+    ✔ Deduplication behavior @done(26-01-08 22:35)
+    ✔ MaxIncludeDepth enforcement @done(26-01-08 22:35)
