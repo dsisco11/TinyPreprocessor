@@ -97,21 +97,21 @@ Phase 5 - Source Mapping System (src/TinyPreprocessor/SourceMaps/):
     ✔ SourceMap Build() method (sorts and returns immutable) @done(26-01-08 20:15)
 
 Phase 6 - Merge System (src/TinyPreprocessor/Merging/):
-  ☐ Create ResolvedResource sealed record
-    ☐ IResource Resource property
-    ☐ IReadOnlyList<IDirective> Directives property
-  ☐ Create MergeContext sealed class
-    ☐ SourceMapBuilder SourceMapBuilder property
-    ☐ DiagnosticCollection Diagnostics property
-    ☐ IReadOnlyDictionary<ResourceId, IResource> ResolvedCache property
-  ☐ Create IMergeStrategy<TContext> interface
-    ☐ ReadOnlyMemory<char> Merge(IReadOnlyList<ResolvedResource> orderedResources, TContext userContext, MergeContext context)
-  ☐ Create ConcatenatingMergeStrategy<TContext> sealed class
-    ☐ Implement IMergeStrategy<TContext>
-    ☐ Iterate resources in topological order
-    ☐ Strip directive ranges from content
-    ☐ Append to StringBuilder
-    ☐ Record mappings via MergeContext.SourceMapBuilder
+  ✔ Create ResolvedResource sealed record @done(26-01-08 20:20)
+    ✔ IResource Resource property @done(26-01-08 20:20)
+    ✔ IReadOnlyList<IDirective> Directives property @done(26-01-08 20:20)
+  ✔ Create MergeContext sealed class @done(26-01-08 20:20)
+    ✔ SourceMapBuilder SourceMapBuilder property @done(26-01-08 20:20)
+    ✔ DiagnosticCollection Diagnostics property @done(26-01-08 20:20)
+    ✔ IReadOnlyDictionary<ResourceId, IResource> ResolvedCache property @done(26-01-08 20:20)
+  ✔ Create IMergeStrategy<TContext> interface @done(26-01-08 20:20)
+    ✔ ReadOnlyMemory<char> Merge(IReadOnlyList<ResolvedResource> orderedResources, TContext userContext, MergeContext context) @done(26-01-08 20:20)
+  ✔ Create ConcatenatingMergeStrategy<TContext> sealed class @done(26-01-08 20:20)
+    ✔ Implement IMergeStrategy<TContext> @done(26-01-08 20:20)
+    ✔ Iterate resources in topological order @done(26-01-08 20:20)
+    ✔ Strip directive ranges from content @done(26-01-08 20:20)
+    ✔ Append to StringBuilder @done(26-01-08 20:20)
+    ✔ Record mappings via MergeContext.SourceMapBuilder @done(26-01-08 20:20)
 
 Phase 7 - Main Orchestrator (src/TinyPreprocessor/):
   ☐ Create PreprocessorOptions sealed record
