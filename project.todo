@@ -72,29 +72,29 @@ Phase 4 - Dependency Graph Layer (src/TinyPreprocessor/Graph/):
     ✔ IReadOnlyList<ResourceId> GetProcessingOrder() method using TopologicalSort.KahnSort() @done(26-01-08 20:10)
 
 Phase 5 - Source Mapping System (src/TinyPreprocessor/SourceMaps/):
-  ☐ Create SourcePosition readonly struct
-    ☐ int Line property (0-based)
-    ☐ int Column property (0-based)
-    ☐ Implement IComparable<SourcePosition>
-    ☐ Implement IEquatable<SourcePosition>
-  ☐ Create SourceSpan readonly struct
-    ☐ SourcePosition Start property
-    ☐ SourcePosition End property
-  ☐ Create SourceMapping sealed record
-    ☐ SourceSpan GeneratedSpan property
-    ☐ ResourceId OriginalResource property
-    ☐ SourceSpan OriginalSpan property
-  ☐ Create SourceLocation sealed record
-    ☐ ResourceId Resource property
-    ☐ SourcePosition OriginalPosition property
-  ☐ Create SourceMap sealed class
-    ☐ IReadOnlyList<SourceMapping> Mappings property (sorted by generated position)
-    ☐ SourceLocation? Query(SourcePosition generatedPosition) method with binary search
-  ☐ Create SourceMapBuilder sealed class
-    ☐ Internal List<SourceMapping> for accumulation
-    ☐ void AddMapping(SourceMapping) method
-    ☐ void AddSegment(ResourceId resource, SourceSpan generated, SourceSpan original) method
-    ☐ SourceMap Build() method (sorts and returns immutable)
+  ✔ Create SourcePosition readonly struct @done(26-01-08 20:15)
+    ✔ int Line property (0-based) @done(26-01-08 20:15)
+    ✔ int Column property (0-based) @done(26-01-08 20:15)
+    ✔ Implement IComparable<SourcePosition> @done(26-01-08 20:15)
+    ✔ Implement IEquatable<SourcePosition> @done(26-01-08 20:15)
+  ✔ Create SourceSpan readonly struct @done(26-01-08 20:15)
+    ✔ SourcePosition Start property @done(26-01-08 20:15)
+    ✔ SourcePosition End property @done(26-01-08 20:15)
+  ✔ Create SourceMapping sealed record @done(26-01-08 20:15)
+    ✔ SourceSpan GeneratedSpan property @done(26-01-08 20:15)
+    ✔ ResourceId OriginalResource property @done(26-01-08 20:15)
+    ✔ SourceSpan OriginalSpan property @done(26-01-08 20:15)
+  ✔ Create SourceLocation sealed record @done(26-01-08 20:15)
+    ✔ ResourceId Resource property @done(26-01-08 20:15)
+    ✔ SourcePosition OriginalPosition property @done(26-01-08 20:15)
+  ✔ Create SourceMap sealed class @done(26-01-08 20:15)
+    ✔ IReadOnlyList<SourceMapping> Mappings property (sorted by generated position) @done(26-01-08 20:15)
+    ✔ SourceLocation? Query(SourcePosition generatedPosition) method with binary search @done(26-01-08 20:15)
+  ✔ Create SourceMapBuilder sealed class @done(26-01-08 20:15)
+    ✔ Internal List<SourceMapping> for accumulation @done(26-01-08 20:15)
+    ✔ void AddMapping(SourceMapping) method @done(26-01-08 20:15)
+    ✔ void AddSegment(ResourceId resource, SourceSpan generated, SourceSpan original) method @done(26-01-08 20:15)
+    ✔ SourceMap Build() method (sorts and returns immutable) @done(26-01-08 20:15)
 
 Phase 6 - Merge System (src/TinyPreprocessor/Merging/):
   ☐ Create ResolvedResource sealed record
