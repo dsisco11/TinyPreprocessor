@@ -39,29 +39,29 @@ Phase 2 - Core Abstractions (src/TinyPreprocessor/Core/):
     ✔ IEnumerable<TDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId) where TDirective : IDirective @done(26-01-08 20:00)
 
 Phase 3 - Diagnostics System (src/TinyPreprocessor/Diagnostics/):
-  ☐ Create DiagnosticSeverity enum (Info = 0, Warning = 1, Error = 2)
-  ☐ Create IPreprocessorDiagnostic interface
-    ☐ DiagnosticSeverity Severity property
-    ☐ string Code property
-    ☐ string Message property
-    ☐ ResourceId? Resource property
-    ☐ Range? Location property
-  ☐ Create CircularDependencyDiagnostic sealed record
-    ☐ Implement IPreprocessorDiagnostic
-    ☐ IReadOnlyList<ResourceId> Cycle property
-    ☐ Code = "TPP0001"
-  ☐ Create ResolutionFailedDiagnostic sealed record
-    ☐ Implement IPreprocessorDiagnostic
-    ☐ string Reference property
-    ☐ Code = "TPP0002"
-  ☐ Create ParseErrorDiagnostic sealed record
-    ☐ Implement IPreprocessorDiagnostic
-    ☐ Code = "TPP0003"
-  ☐ Create DiagnosticCollection sealed class
-    ☐ Thread-safe with lock
-    ☐ void Add(IPreprocessorDiagnostic) method
-    ☐ bool HasErrors property
-    ☐ Implement IReadOnlyCollection<IPreprocessorDiagnostic>
+  ✔ Create DiagnosticSeverity enum (Info = 0, Warning = 1, Error = 2) @done(26-01-08 20:05)
+  ✔ Create IPreprocessorDiagnostic interface @done(26-01-08 20:05)
+    ✔ DiagnosticSeverity Severity property @done(26-01-08 20:05)
+    ✔ string Code property @done(26-01-08 20:05)
+    ✔ string Message property @done(26-01-08 20:05)
+    ✔ ResourceId? Resource property @done(26-01-08 20:05)
+    ✔ Range? Location property @done(26-01-08 20:05)
+  ✔ Create CircularDependencyDiagnostic sealed record @done(26-01-08 20:05)
+    ✔ Implement IPreprocessorDiagnostic @done(26-01-08 20:05)
+    ✔ IReadOnlyList<ResourceId> Cycle property @done(26-01-08 20:05)
+    ✔ Code = "TPP0001" @done(26-01-08 20:05)
+  ✔ Create ResolutionFailedDiagnostic sealed record @done(26-01-08 20:05)
+    ✔ Implement IPreprocessorDiagnostic @done(26-01-08 20:05)
+    ✔ string Reference property @done(26-01-08 20:05)
+    ✔ Code = "TPP0002" @done(26-01-08 20:05)
+  ✔ Create ParseErrorDiagnostic sealed record @done(26-01-08 20:05)
+    ✔ Implement IPreprocessorDiagnostic @done(26-01-08 20:05)
+    ✔ Code = "TPP0003" @done(26-01-08 20:05)
+  ✔ Create DiagnosticCollection sealed class @done(26-01-08 20:05)
+    ✔ Thread-safe with lock @done(26-01-08 20:05)
+    ✔ void Add(IPreprocessorDiagnostic) method @done(26-01-08 20:05)
+    ✔ bool HasErrors property @done(26-01-08 20:05)
+    ✔ Implement IReadOnlyCollection<IPreprocessorDiagnostic> @done(26-01-08 20:05)
 
 Phase 4 - Dependency Graph Layer (src/TinyPreprocessor/Graph/):
   ☐ Create ResourceDependencyGraph sealed class
