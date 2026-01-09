@@ -4,10 +4,30 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- Package Metadata -->
+    <PackageId>TinyPreprocessor</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>David Sisco</Authors>
+    <Description>A lightweight, extensible preprocessing library for resolving dependencies, merging resources, and generating source maps. Supports custom directive parsers, resource resolvers, and merge strategies.</Description>
+    <PackageTags>preprocessor;include;merge;source-map;dependency-graph;directive</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/dsisco11/TinyPreprocessor</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/dsisco11/TinyPreprocessor.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Graffs" Version="0.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
