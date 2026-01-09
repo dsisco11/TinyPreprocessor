@@ -13,9 +13,9 @@ Phase 1 - Project Setup:
     ✔ Create TinyPreprocessor.sln at workspace root @done(26-01-07 18:15)
     ✔ Create src/TinyPreprocessor/TinyPreprocessor.csproj (net8.0, nullable enabled) @done(26-01-07 18:15)
   ✔ Add PackageReference to Graffs 0.1.0 @done(26-01-08 19:45)
-  ☐ Create tests/TinyPreprocessor.Tests/TinyPreprocessor.Tests.csproj
-  ☐ Add xUnit and Moq package references to test project
-  ☐ Add project reference from test project to main library
+  ✔ Create tests/TinyPreprocessor.Tests/TinyPreprocessor.Tests.csproj @done(26-01-08 19:46)
+  ✔ Add xUnit and Moq package references to test project @done(26-01-08 19:46)
+  ✔ Add project reference from test project to main library @done(26-01-08 19:46)
 
 Phase 2 - Core Abstractions (src/TinyPreprocessor/Core/):
   ☐ Create ResourceId readonly struct
