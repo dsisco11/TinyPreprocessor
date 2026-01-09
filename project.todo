@@ -18,25 +18,25 @@ Phase 1 - Project Setup:
   ✔ Add project reference from test project to main library @done(26-01-08 19:46)
 
 Phase 2 - Core Abstractions (src/TinyPreprocessor/Core/):
-  ☐ Create ResourceId readonly struct
-    ☐ Wrap string Path property
-    ☐ Implement IEquatable<ResourceId>
-    ☐ Override GetHashCode() and Equals()
-    ☐ Add implicit/explicit conversion operators
-  ☐ Create IResource interface
-    ☐ ResourceId Id property
-    ☐ ReadOnlyMemory<char> Content property
-    ☐ IReadOnlyDictionary<string, object>? Metadata property
-  ☐ Create Resource sealed record implementing IResource
-  ☐ Create IDirective marker interface
-    ☐ Range Location property
-  ☐ Create IResourceResolver interface
-    ☐ ValueTask<ResourceResolutionResult> ResolveAsync(string reference, IResource? relativeTo, CancellationToken ct)
-  ☐ Create ResourceResolutionResult record
-    ☐ IResource? Resource property
-    ☐ IPreprocessorDiagnostic? Error property
-  ☐ Create IDirectiveParser<TDirective> interface
-    ☐ IEnumerable<TDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId) where TDirective : IDirective
+  ✔ Create ResourceId readonly struct @done(26-01-08 20:00)
+    ✔ Wrap string Path property @done(26-01-08 20:00)
+    ✔ Implement IEquatable<ResourceId> @done(26-01-08 20:00)
+    ✔ Override GetHashCode() and Equals() @done(26-01-08 20:00)
+    ✔ Add implicit/explicit conversion operators @done(26-01-08 20:00)
+  ✔ Create IResource interface @done(26-01-08 20:00)
+    ✔ ResourceId Id property @done(26-01-08 20:00)
+    ✔ ReadOnlyMemory<char> Content property @done(26-01-08 20:00)
+    ✔ IReadOnlyDictionary<string, object>? Metadata property @done(26-01-08 20:00)
+  ✔ Create Resource sealed record implementing IResource @done(26-01-08 20:00)
+  ✔ Create IDirective marker interface @done(26-01-08 20:00)
+    ✔ Range Location property @done(26-01-08 20:00)
+  ✔ Create IResourceResolver interface @done(26-01-08 20:00)
+    ✔ ValueTask<ResourceResolutionResult> ResolveAsync(string reference, IResource? relativeTo, CancellationToken ct) @done(26-01-08 20:00)
+  ✔ Create ResourceResolutionResult record @done(26-01-08 20:00)
+    ✔ IResource? Resource property @done(26-01-08 20:00)
+    ✔ IPreprocessorDiagnostic? Error property @done(26-01-08 20:00)
+  ✔ Create IDirectiveParser<TDirective> interface @done(26-01-08 20:00)
+    ✔ IEnumerable<TDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId) where TDirective : IDirective @done(26-01-08 20:00)
 
 Phase 3 - Diagnostics System (src/TinyPreprocessor/Diagnostics/):
   ☐ Create DiagnosticSeverity enum (Info = 0, Warning = 1, Error = 2)
