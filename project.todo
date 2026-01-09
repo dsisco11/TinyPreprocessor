@@ -64,12 +64,12 @@ Phase 3 - Diagnostics System (src/TinyPreprocessor/Diagnostics/):
     ✔ Implement IReadOnlyCollection<IPreprocessorDiagnostic> @done(26-01-08 20:05)
 
 Phase 4 - Dependency Graph Layer (src/TinyPreprocessor/Graph/):
-  ☐ Create ResourceDependencyGraph sealed class
-    ☐ Internal DependencyGraphBuilder<ResourceId> field
-    ☐ void AddResource(ResourceId id) method
-    ☐ void AddDependency(ResourceId dependent, ResourceId dependency) method
-    ☐ IReadOnlyList<IReadOnlyList<ResourceId>> DetectCycles() method using CycleDetection.FindAllCycles()
-    ☐ IReadOnlyList<ResourceId> GetProcessingOrder() method using TopologicalSort.KahnSort()
+  ✔ Create ResourceDependencyGraph sealed class @done(26-01-08 20:10)
+    ✔ Internal DependencyGraphBuilder<ResourceId> field @done(26-01-08 20:10)
+    ✔ void AddResource(ResourceId id) method @done(26-01-08 20:10)
+    ✔ void AddDependency(ResourceId dependent, ResourceId dependency) method @done(26-01-08 20:10)
+    ✔ IReadOnlyList<IReadOnlyList<ResourceId>> DetectCycles() method using CycleDetection.FindAllCycles() @done(26-01-08 20:10)
+    ✔ IReadOnlyList<ResourceId> GetProcessingOrder() method using TopologicalSort.KahnSort() @done(26-01-08 20:10)
 
 Phase 5 - Source Mapping System (src/TinyPreprocessor/SourceMaps/):
   ☐ Create SourcePosition readonly struct
