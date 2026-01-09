@@ -12,7 +12,7 @@ Phase 1 - Project Setup:
   Phase 1.2 - Solution Structure:
     ✔ Create TinyPreprocessor.sln at workspace root @done(26-01-07 18:15)
     ✔ Create src/TinyPreprocessor/TinyPreprocessor.csproj (net8.0, nullable enabled) @done(26-01-07 18:15)
-  ☐ Add PackageReference to Graffs 0.1.0
+  ✔ Add PackageReference to Graffs 0.1.0 @done(26-01-08 19:45)
   ☐ Create tests/TinyPreprocessor.Tests/TinyPreprocessor.Tests.csproj
   ☐ Add xUnit and Moq package references to test project
   ☐ Add project reference from test project to main library
