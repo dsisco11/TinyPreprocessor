@@ -14,23 +14,15 @@ namespace TinyPreprocessor.SourceMaps;
 public sealed class SourceMap
 {
     private readonly IReadOnlyList<OffsetMappingSegment> _segments;
-    private readonly TextLineIndex? _generatedLineIndex;
-    private readonly IReadOnlyDictionary<ResourceId, TextLineIndex>? _originalLineIndexes;
 
     /// <summary>
     /// Initializes a new instance of <see cref="SourceMap"/> with the specified offset segments.
     /// </summary>
     /// <param name="segments">The sorted list of offset mapping segments.</param>
-    /// <param name="generatedLineIndex">Line index for converting generated positions to offsets.</param>
-    /// <param name="originalLineIndexes">Line indexes for converting original offsets to positions.</param>
     internal SourceMap(
-        IReadOnlyList<OffsetMappingSegment> segments,
-        TextLineIndex? generatedLineIndex,
-        IReadOnlyDictionary<ResourceId, TextLineIndex>? originalLineIndexes)
+        IReadOnlyList<OffsetMappingSegment> segments)
     {
         _segments = segments;
-        _generatedLineIndex = generatedLineIndex;
-        _originalLineIndexes = originalLineIndexes;
     }
 
     /// <summary>
@@ -38,94 +30,83 @@ public sealed class SourceMap
     /// </summary>
     /// <remarks>
     /// This is an implementation detail exposed for debugging and advanced scenarios.
-    /// The primary API surface is the set of <see cref="Query(SourcePosition)"/> and range query overloads.
+    /// The primary API surface is the set of offset-based <see cref="Query(int)"/> and range query overloads.
     /// </remarks>
     internal IReadOnlyList<OffsetMappingSegment> Segments => _segments;
 
     /// <summary>
-    /// Queries the source map for the original location corresponding to a generated position.
+    /// Queries the source map for the original location corresponding to a generated offset.
     /// </summary>
-    /// <param name="generatedPosition">The position in the generated output.</param>
+    /// <param name="generatedOffset">The 0-based offset in the generated output.</param>
     /// <returns>
     /// The original source location, or <see langword="null"/> if no mapping contains the position.
     /// </returns>
-    public SourceLocation? Query(SourcePosition generatedPosition)
+    public SourceLocation? Query(int generatedOffset)
     {
-        var ranges = Query(generatedPosition, length: 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(generatedOffset);
+
+        var ranges = QueryRangeByLength(generatedOffset, length: 1);
         return ranges.Count == 0
             ? null
-            : new SourceLocation(ranges[0].Resource, ranges[0].OriginalStart);
+            : new SourceLocation(ranges[0].Resource, ranges[0].OriginalStartOffset);
     }
 
     /// <summary>
     /// Queries the source map for all original ranges corresponding to a generated range.
     /// </summary>
-    /// <param name="generatedStart">Inclusive start position in the generated output.</param>
-    /// <param name="length">Length of the generated range (in characters).</param>
+    /// <param name="generatedStartOffset">Inclusive start offset in the generated output.</param>
+    /// <param name="length">Length of the generated range (in symbols).</param>
     /// <returns>Zero or more exact mappings. Unmapped gaps are omitted.</returns>
-    public IReadOnlyList<SourceRangeLocation> Query(SourcePosition generatedStart, int length)
+    public IReadOnlyList<SourceRangeLocation> QueryRangeByLength(int generatedStartOffset, int length)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentOutOfRangeException.ThrowIfNegative(generatedStartOffset);
 
         if (length == 0)
         {
             return Array.Empty<SourceRangeLocation>();
         }
 
-        if (_generatedLineIndex is null || _originalLineIndexes is null || _segments.Count == 0)
+        if (_segments.Count == 0)
         {
             return Array.Empty<SourceRangeLocation>();
         }
 
-        var generatedIndex = _generatedLineIndex.Value;
-        if (!generatedIndex.TryGetOffset(generatedStart, out var startOffset))
-        {
-            return Array.Empty<SourceRangeLocation>();
-        }
-
-        var endOffset = Math.Min(startOffset + length, generatedIndex.TextLength);
-        return QueryOffsetRange(new OffsetSpan(startOffset, endOffset));
+        return QueryOffsetRange(new OffsetSpan(generatedStartOffset, generatedStartOffset + length));
     }
 
     /// <summary>
     /// Queries the source map for all original ranges corresponding to a generated range.
     /// </summary>
-    /// <param name="generatedStart">Inclusive start position in the generated output.</param>
-    /// <param name="generatedEnd">Exclusive end position in the generated output.</param>
+    /// <param name="generatedStartOffset">Inclusive start offset in the generated output.</param>
+    /// <param name="generatedEndOffset">Exclusive end offset in the generated output.</param>
     /// <returns>Zero or more exact mappings. Unmapped gaps are omitted.</returns>
-    public IReadOnlyList<SourceRangeLocation> Query(SourcePosition generatedStart, SourcePosition generatedEnd)
+    public IReadOnlyList<SourceRangeLocation> QueryRangeByEnd(int generatedStartOffset, int generatedEndOffset)
     {
-        if (generatedEnd < generatedStart)
+        if (generatedEndOffset < generatedStartOffset)
         {
-            throw new ArgumentException("End position must be greater than or equal to start position.", nameof(generatedEnd));
+            throw new ArgumentException("End offset must be greater than or equal to start offset.", nameof(generatedEndOffset));
         }
 
-        if (_generatedLineIndex is null || _originalLineIndexes is null || _segments.Count == 0)
-        {
-            return Array.Empty<SourceRangeLocation>();
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(generatedStartOffset);
+        ArgumentOutOfRangeException.ThrowIfNegative(generatedEndOffset);
 
-        var generatedIndex = _generatedLineIndex.Value;
-        if (!generatedIndex.TryGetOffset(generatedStart, out var startOffset) ||
-            !generatedIndex.TryGetOffset(generatedEnd, out var endOffset))
+        if (_segments.Count == 0)
         {
             return Array.Empty<SourceRangeLocation>();
         }
 
-        endOffset = Math.Min(endOffset, generatedIndex.TextLength);
-        return QueryOffsetRange(new OffsetSpan(startOffset, endOffset));
+        return QueryOffsetRange(new OffsetSpan(generatedStartOffset, generatedEndOffset));
     }
 
     #region Offset-Based Query Core
 
     private IReadOnlyList<SourceRangeLocation> QueryOffsetRange(OffsetSpan generatedRange)
     {
-        if (_generatedLineIndex is null || _originalLineIndexes is null || generatedRange.Length <= 0)
+        if (generatedRange.Length <= 0)
         {
             return Array.Empty<SourceRangeLocation>();
         }
-
-        var generatedIndex = _generatedLineIndex.Value;
         var results = new List<SourceRangeLocation>();
 
         var startIdx = FindFirstOverlappingSegmentIndex(generatedRange.Start);
@@ -154,26 +135,16 @@ public sealed class SourceMap
                 continue;
             }
 
-            if (!_originalLineIndexes.TryGetValue(segment.OriginalResource, out var originalIndex))
-            {
-                continue;
-            }
-
             var delta = overlap.Start - segment.Generated.Start;
             var originalStartOffset = segment.Original.Start + delta;
             var originalEndOffset = originalStartOffset + overlap.Length;
 
-            var mappedGeneratedStart = generatedIndex.GetPosition(overlap.Start);
-            var mappedGeneratedEnd = generatedIndex.GetPosition(overlap.End);
-            var mappedOriginalStart = originalIndex.GetPosition(originalStartOffset);
-            var mappedOriginalEnd = originalIndex.GetPosition(originalEndOffset);
-
             results.Add(new SourceRangeLocation(
                 segment.OriginalResource,
-                mappedOriginalStart,
-                mappedOriginalEnd,
-                mappedGeneratedStart,
-                mappedGeneratedEnd));
+                originalStartOffset,
+                originalEndOffset,
+                overlap.Start,
+                overlap.End));
         }
 
         return results;

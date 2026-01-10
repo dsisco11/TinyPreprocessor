@@ -12,37 +12,6 @@ public sealed class SourceMapBuilder
 {
     private readonly List<OffsetMappingSegment> _offsetSegments = [];
 
-    private TextLineIndex? _generatedLineIndex;
-    private readonly Dictionary<ResourceId, TextLineIndex> _originalLineIndexes = [];
-
-    #region Content Registration
-
-    /// <summary>
-    /// Registers the final generated output so queries can convert <see cref="SourcePosition"/> to offsets.
-    /// </summary>
-    /// <param name="generatedContent">The merged output content.</param>
-    public void SetGeneratedContent(ReadOnlyMemory<char> generatedContent)
-    {
-        _generatedLineIndex = TextLineIndex.Build(generatedContent.Span);
-    }
-
-    /// <summary>
-    /// Registers original resources so queries can convert offsets to <see cref="SourcePosition"/>.
-    /// </summary>
-    /// <param name="resources">All resolved resources available during preprocessing.</param>
-    public void SetOriginalResources(IReadOnlyDictionary<ResourceId, IResource> resources)
-    {
-        ArgumentNullException.ThrowIfNull(resources);
-
-        _originalLineIndexes.Clear();
-        foreach (var (resourceId, resource) in resources)
-        {
-            _originalLineIndexes[resourceId] = TextLineIndex.Build(resource.Content.Span);
-        }
-    }
-
-    #endregion
-
     /// <summary>
     /// Adds an exact offset-based mapping segment.
     /// </summary>
@@ -84,10 +53,7 @@ public sealed class SourceMapBuilder
             .ToList()
             .AsReadOnly();
 
-        return new SourceMap(
-            segments,
-            _generatedLineIndex,
-            _originalLineIndexes.Count > 0 ? new Dictionary<ResourceId, TextLineIndex>(_originalLineIndexes) : null);
+        return new SourceMap(segments);
     }
 
     /// <summary>
@@ -96,7 +62,5 @@ public sealed class SourceMapBuilder
     public void Clear()
     {
         _offsetSegments.Clear();
-        _generatedLineIndex = null;
-        _originalLineIndexes.Clear();
     }
 }

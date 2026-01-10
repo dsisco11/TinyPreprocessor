@@ -25,33 +25,50 @@ dotnet add package TinyPreprocessor
 
 ## Quick Start
 
-TinyPreprocessor requires three components:
+TinyPreprocessor is a small pipeline that:
+
+1. Parses directives from each resource.
+2. Uses `IDirectiveModel<TDirective>` to decide which directives represent dependencies (and where they are).
+3. Resolves dependencies via `IResourceResolver<TSymbol>` (building a dependency graph).
+4. Topologically orders resources (dependencies first).
+5. Merges them via `IMergeStrategy<TSymbol, TDirective, TContext>` while building a source map and collecting diagnostics.
+
+TinyPreprocessor requires four components:
 
 1. **`IDirectiveParser<TDirective>`** – Parses directives from resource content
-2. **`IResourceResolver`** – Resolves references to actual resources
-3. **`IMergeStrategy<TContext>`** – Combines resources into final output
+2. **`IDirectiveModel<TDirective>`** – Interprets directive locations and dependency references
+3. **`IResourceResolver<TSymbol>`** – Resolves references to actual resources
+4. **`IMergeStrategy<TSymbol, TDirective, TContext>`** – Combines resources into final output
 
-### Example: Simple Include Directive
+### Example: Minimal In-Memory Includes
 
 ```csharp
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TinyPreprocessor;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.Diagnostics;
-using TinyPreprocessor.Merging;
+using TinyPreprocessor.Text;
 
-// 1. Define your directive type
-public sealed record IncludeDirective(string Path, Range Location) : IIncludeDirective
+// 1) Define your directive type.
+public sealed record IncludeDirective(string Reference, Range Location);
+
+// 2) Provide directive semantics to the pipeline.
+public sealed class IncludeDirectiveModel : IDirectiveModel<IncludeDirective>
 {
-    public string Reference => Path;
+    public Range GetLocation(IncludeDirective directive) => directive.Location;
+
+    public bool TryGetReference(IncludeDirective directive, out string reference)
+    {
+        reference = directive.Reference;
+        return true;
+    }
 }
 
-// 2. Implement directive parser
-public sealed class IncludeParser : IDirectiveParser<IncludeDirective>
+// 3) Implement a tiny directive parser for lines like: #include other.txt
+public sealed class IncludeParser : IDirectiveParser<char, IncludeDirective>
 {
     public IEnumerable<IncludeDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId)
     {
@@ -71,48 +88,49 @@ public sealed class IncludeParser : IDirectiveParser<IncludeDirective>
     }
 }
 
-// 3. Implement resource resolver
-public sealed class FileResolver : IResourceResolver
+// 4) Implement an in-memory resolver.
+public sealed class InMemoryResolver : IResourceResolver<char>
 {
-    private readonly string _basePath;
+    private readonly IReadOnlyDictionary<ResourceId, string> _files;
 
-    public FileResolver(string basePath) => _basePath = basePath;
+    public InMemoryResolver(IReadOnlyDictionary<ResourceId, string> files) => _files = files;
 
-    public ValueTask<ResourceResolutionResult> ResolveAsync(
+    public ValueTask<ResourceResolutionResult<char>> ResolveAsync(
         string reference,
-        IResource? context,
+        IResource<char>? context,
         CancellationToken ct)
     {
-        var fullPath = Path.Combine(_basePath, reference);
-
-        if (!File.Exists(fullPath))
+        if (!_files.TryGetValue(new ResourceId(reference), out var content))
         {
-            return ValueTask.FromResult(new ResourceResolutionResult(
+            return ValueTask.FromResult(new ResourceResolutionResult<char>(
                 null,
-                new ResolutionFailedDiagnostic(reference, $"File not found: {fullPath}")));
+                new ResolutionFailedDiagnostic(reference, $"Not found: {reference}")));
         }
 
-        var content = File.ReadAllText(fullPath);
-        var resource = new Resource(reference, content.AsMemory());
-        return ValueTask.FromResult(new ResourceResolutionResult(resource, null));
+        var resource = new Resource<char>(reference, content.AsMemory());
+        return ValueTask.FromResult(new ResourceResolutionResult<char>(resource, null));
     }
 }
 
-// 4. Use the preprocessor
+// 5) Wire everything together.
+var files = new Dictionary<ResourceId, string>
+{
+    ["main.txt"] = "#include a.txt\nMAIN\n",
+    ["a.txt"] = "A\n#include b.txt\n",
+    ["b.txt"] = "B\n"
+};
+
 var parser = new IncludeParser();
-var resolver = new FileResolver(@"C:\MyProject\src");
-var merger = new ConcatenatingMergeStrategy<object>();
-
+var directiveModel = new IncludeDirectiveModel();
+var resolver = new InMemoryResolver(files);
+var merger = new ConcatenatingMergeStrategy<IncludeDirective, object>();
 var context = new object();
-
-var preprocessor = new Preprocessor<IncludeDirective, object>(parser, resolver, merger);
-
-var rootContent = File.ReadAllText(@"C:\MyProject\src\main.txt");
-var root = new Resource("main.txt", rootContent.AsMemory());
+var preprocessor = new Preprocessor<char, IncludeDirective, object>(parser, directiveModel, resolver, merger);
+var root = new Resource<char>("main.txt", files["main.txt"].AsMemory());
 
 var result = await preprocessor.ProcessAsync(root, context);
 
-if (result.Success)
+if (!result.Diagnostics.HasErrors)
 {
     Console.WriteLine(result.Content.ToString());
 }
@@ -146,37 +164,38 @@ Query the source map to trace output positions back to original files:
 ```csharp
 var result = await preprocessor.ProcessAsync(root, context);
 
-// Find where line 50, column 10 in output came from
-var location = result.SourceMap.Query(new SourcePosition(line: 49, column: 9));
+// Find where generated offset 0 in output came from
+var location = result.SourceMap.Query(generatedOffset: 0);
 
 if (location is not null)
 {
-    var (line, col) = location.OriginalPosition.ToOneBased();
-    Console.WriteLine($"Originated from {location.Resource.Path} at line {line}, column {col}");
+    Console.WriteLine($"Originated from {location.Resource.Path} at original offset {location.OriginalOffset}");
 }
 
 // For precise diagnostic spans, query a range.
 // The range may map to multiple original resources (e.g., it crosses file boundaries).
-var ranges = result.SourceMap.Query(new SourcePosition(line: 49, column: 9), length: 20);
+var ranges = result.SourceMap.QueryRangeByLength(generatedStartOffset: 0, length: 20);
 
 foreach (var range in ranges)
 {
     Console.WriteLine(
-        $"Generated [{range.GeneratedStart} - {range.GeneratedEnd}) -> {range.Resource.Path} [{range.OriginalStart} - {range.OriginalEnd})");
+        $"Generated [{range.GeneratedStartOffset} - {range.GeneratedEndOffset}) -> {range.Resource.Path} [{range.OriginalStartOffset} - {range.OriginalEndOffset})");
 }
 ```
 
 ## Custom Merge Strategy
 
-Implement `IMergeStrategy<TContext>` for custom output formatting:
+Implement `IMergeStrategy<TSymbol, TDirective, TContext>` for custom output formatting:
 
 ```csharp
-public sealed class JsonMergeStrategy : IMergeStrategy<JsonMergeOptions>
+public sealed record JsonMergeOptions;
+
+public sealed class JsonMergeStrategy : IMergeStrategy<char, IncludeDirective, JsonMergeOptions>
 {
     public ReadOnlyMemory<char> Merge(
-        IReadOnlyList<ResolvedResource> orderedResources,
-        JsonMergeOptions context,
-        MergeContext mergeContext)
+        IReadOnlyList<ResolvedResource<char, IncludeDirective>> orderedResources,
+        JsonMergeOptions userContext,
+        MergeContext<char, IncludeDirective> mergeContext)
     {
         // Custom merge logic here
         // Use mergeContext.SourceMapBuilder to record mappings.
@@ -204,8 +223,8 @@ public sealed class JsonMergeStrategy : IMergeStrategy<JsonMergeOptions>
 ┌─────────────────────────────────────────────────────────────┐
 │                      Preprocessor                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ IDirective   │  │ IResource    │  │ IMergeStrategy   │  │
-│  │ Parser       │  │ Resolver     │  │                  │  │
+│  │ Directive    │  │ IResource<T> │  │ IMergeStrategy   │  │
+│  │ Parser/Model │  │ Resolver     │  │                  │  │
 │  └──────────────┘  └──────────────┘  └──────────────────┘  │
 │          │                │                   │             │
 │          ▼                ▼                   ▼             │

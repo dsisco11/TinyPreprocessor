@@ -15,45 +15,32 @@ public sealed class SourceMapBuilderTests
     {
         var builder = new SourceMapBuilder();
 
-        var generated = "0123456789";
-        builder.SetGeneratedContent(generated.AsMemory());
+        var r1 = new ResourceId("a.txt");
+        var r2 = new ResourceId("b.txt");
 
-        var r1 = new Resource("a.txt", "xxxxx".AsMemory());
-        var r2 = new Resource("b.txt", "yyyyy".AsMemory());
-        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
-        {
-            [r1.Id] = r1,
-            [r2.Id] = r2
-        });
-
-        builder.AddOffsetSegment(r2.Id, generatedStartOffset: 5, originalStartOffset: 0, length: 5);
-        builder.AddOffsetSegment(r1.Id, generatedStartOffset: 0, originalStartOffset: 0, length: 5);
+        builder.AddOffsetSegment(r2, generatedStartOffset: 5, originalStartOffset: 0, length: 5);
+        builder.AddOffsetSegment(r1, generatedStartOffset: 0, originalStartOffset: 0, length: 5);
 
         var map = builder.Build();
 
-        var first = map.Query(new SourcePosition(0, 0));
-        var second = map.Query(new SourcePosition(0, 7));
+        var first = map.Query(generatedOffset: 0);
+        var second = map.Query(generatedOffset: 7);
 
         Assert.NotNull(first);
         Assert.NotNull(second);
-        Assert.Equal(r1.Id, first.Resource);
-        Assert.Equal(r2.Id, second.Resource);
+        Assert.Equal(r1, first.Resource);
+        Assert.Equal(r2, second.Resource);
     }
 
     [Fact]
-    public void Clear_RemovesAllSegmentsAndIndexes()
+    public void Clear_RemovesAllSegments()
     {
         var builder = new SourceMapBuilder();
-        builder.SetGeneratedContent("abc".AsMemory());
-        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
-        {
-            [new ResourceId("x.txt")] = new Resource("x.txt", "abc".AsMemory())
-        });
         builder.AddOffsetSegment("x.txt", generatedStartOffset: 0, originalStartOffset: 0, length: 3);
 
         builder.Clear();
         var map = builder.Build();
 
-        Assert.Null(map.Query(new SourcePosition(0, 0)));
+        Assert.Null(map.Query(generatedOffset: 0));
     }
 }

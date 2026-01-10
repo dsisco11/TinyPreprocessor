@@ -3,12 +3,13 @@ namespace TinyPreprocessor.Core;
 /// <summary>
 /// Extracts directives from resource content.
 /// </summary>
+/// <typeparam name="TSymbol">The symbol type of the content being parsed.</typeparam>
 /// <typeparam name="TDirective">The type of directive this parser produces.</typeparam>
 /// <remarks>
 /// Parsing is CPU-bound, so this interface uses synchronous methods.
 /// The <see cref="IEnumerable{T}"/> return type allows lazy evaluation for streaming large files.
 /// </remarks>
-public interface IDirectiveParser<out TDirective> where TDirective : IDirective
+public interface IDirectiveParser<TSymbol, out TDirective>
 {
     /// <summary>
     /// Parses the content and extracts all directives.
@@ -16,5 +17,5 @@ public interface IDirectiveParser<out TDirective> where TDirective : IDirective
     /// <param name="content">The content to parse.</param>
     /// <param name="resourceId">The identifier of the resource being parsed, for context-aware parsing.</param>
     /// <returns>An enumerable of parsed directives.</returns>
-    IEnumerable<TDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId);
+    IEnumerable<TDirective> Parse(ReadOnlyMemory<TSymbol> content, ResourceId resourceId);
 }
