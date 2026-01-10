@@ -33,7 +33,7 @@ TinyPreprocessor is a small pipeline that:
 4. Topologically orders resources (dependencies first).
 5. Merges them via `IMergeStrategy<TContent, TDirective, TContext>` while building a source map and collecting diagnostics.
 
-TinyPreprocessor requires four components:
+TinyPreprocessor requires five components:
 
 1. **`IDirectiveParser<TContent, TDirective>`** – Parses directives from resource content
 2. **`IDirectiveModel<TDirective>`** – Interprets directive locations and dependency references
@@ -224,10 +224,13 @@ public sealed class JsonMergeStrategy : IMergeStrategy<ReadOnlyMemory<char>, Inc
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Preprocessor                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ Directive    │  │ IResource<T> │  │ IMergeStrategy   │  │
-│  │ Parser/Model │  │ Resolver     │  │                  │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
+│  ┌──────────────┐  ┌────────────────────┐  ┌──────────────────┐  │
+│  │ Directive    │  │ IResourceResolver  │  │ IMergeStrategy   │  │
+│  │ Parser/Model │  │                   │  │                  │  │
+│  └──────────────┘  └────────────────────┘  └──────────────────┘  │
+│  ┌────────────────────┐                                         │
+│  │ IContentModel       │                                         │
+│  └────────────────────┘                                         │
 │          │                │                   │             │
 │          ▼                ▼                   ▼             │
 │  ┌─────────────────────────────────────────────────────┐   │
