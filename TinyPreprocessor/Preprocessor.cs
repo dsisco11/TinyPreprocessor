@@ -92,6 +92,10 @@ public sealed class Preprocessor<TDirective, TContext> where TDirective : IDirec
 
         var mergedContent = _mergeStrategy.Merge(orderedResources, context, mergeContext);
 
+        // Register content for offset-based source map queries.
+        sourceMapBuilder.SetGeneratedContent(mergedContent);
+        sourceMapBuilder.SetOriginalResources(resolvedCache);
+
         // Phase 5: Build result
         return new PreprocessResult(
             mergedContent,

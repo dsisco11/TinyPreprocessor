@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.SourceMaps;
 using Xunit;
@@ -145,6 +146,84 @@ public sealed class SourceMapQueryTests
         var result = sourceMap.Query(new SourcePosition(2, 5));
 
         Assert.Null(result);
+    }
+
+    #endregion
+
+    #region Exact Range Query Tests
+
+    [Fact]
+    public void Query_RangeOverTwoSegments_ReturnsTwoMappings()
+    {
+        var builder = new SourceMapBuilder();
+
+        var generated = "AAAAABBBBBCCCCCDDDDDEEEEE";
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var resource1 = new Resource("file1.txt", "xxxxx".AsMemory());
+        var resource2 = new Resource("file2.txt", "yyyyy".AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
+        {
+            [resource1.Id] = resource1,
+            [resource2.Id] = resource2
+        });
+
+        // Segment 1: generated [0..5) -> file1 [0..5)
+        builder.AddSegment(
+            resource1.Id,
+            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 5)),
+            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 5)));
+
+        // Segment 2: generated [10..15) -> file2 [0..5)
+        builder.AddSegment(
+            resource2.Id,
+            new SourceSpan(new SourcePosition(0, 10), new SourcePosition(0, 15)),
+            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 5)));
+
+        var sourceMap = builder.Build();
+
+        var results = sourceMap.Query(new SourcePosition(0, 0), length: 15);
+
+        Assert.Equal(2, results.Count);
+
+        Assert.Equal(resource1.Id, results[0].Resource);
+        Assert.Equal(new SourcePosition(0, 0), results[0].GeneratedStart);
+        Assert.Equal(new SourcePosition(0, 5), results[0].GeneratedEnd);
+        Assert.Equal(new SourcePosition(0, 0), results[0].OriginalStart);
+        Assert.Equal(new SourcePosition(0, 5), results[0].OriginalEnd);
+
+        Assert.Equal(resource2.Id, results[1].Resource);
+        Assert.Equal(new SourcePosition(0, 10), results[1].GeneratedStart);
+        Assert.Equal(new SourcePosition(0, 15), results[1].GeneratedEnd);
+        Assert.Equal(new SourcePosition(0, 0), results[1].OriginalStart);
+        Assert.Equal(new SourcePosition(0, 5), results[1].OriginalEnd);
+    }
+
+    [Fact]
+    public void Query_RangeByStartEnd_ReturnsSameResultsAsLengthOverload()
+    {
+        var builder = new SourceMapBuilder();
+
+        var generated = "0123456789ABCDEFGHIJ";
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var resource = new Resource("file.txt", "xxxxxxxxxxxxxxxxxxxx".AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
+        {
+            [resource.Id] = resource
+        });
+
+        builder.AddSegment(
+            resource.Id,
+            new SourceSpan(new SourcePosition(0, 3), new SourcePosition(0, 8)),
+            new SourceSpan(new SourcePosition(0, 7), new SourcePosition(0, 12)));
+
+        var sourceMap = builder.Build();
+
+        var byLength = sourceMap.Query(new SourcePosition(0, 0), length: 10);
+        var byStartEnd = sourceMap.Query(new SourcePosition(0, 0), new SourcePosition(0, 10));
+
+        Assert.Equal(byLength, byStartEnd);
     }
 
     #endregion
