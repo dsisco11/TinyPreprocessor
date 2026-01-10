@@ -19,6 +19,10 @@ A lightweight, extensible preprocessing library for .NET that resolves dependenc
 dotnet add package TinyPreprocessor
 ```
 
+## Requirements
+
+- .NET 8+ (TinyPreprocessor targets `net8.0`)
+
 ## Quick Start
 
 TinyPreprocessor requires three components:
@@ -30,8 +34,14 @@ TinyPreprocessor requires three components:
 ### Example: Simple Include Directive
 
 ```csharp
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using TinyPreprocessor;
 using TinyPreprocessor.Core;
+using TinyPreprocessor.Diagnostics;
 using TinyPreprocessor.Merging;
 
 // 1. Define your directive type
@@ -93,12 +103,14 @@ var parser = new IncludeParser();
 var resolver = new FileResolver(@"C:\MyProject\src");
 var merger = new ConcatenatingMergeStrategy<object>();
 
+var context = new object();
+
 var preprocessor = new Preprocessor<IncludeDirective, object>(parser, resolver, merger);
 
 var rootContent = File.ReadAllText(@"C:\MyProject\src\main.txt");
 var root = new Resource("main.txt", rootContent.AsMemory());
 
-var result = await preprocessor.ProcessAsync(root, context: null);
+var result = await preprocessor.ProcessAsync(root, context);
 
 if (result.Success)
 {
@@ -117,11 +129,13 @@ else
 
 ```csharp
 var options = new PreprocessorOptions(
-    DeduplicateIncludes: true,  // Include each resource only once (like #pragma once)
+    DeduplicateIncludes: true,  // Currently informational (resources are processed once per call)
     MaxIncludeDepth: 100,       // Safety limit for recursion
     ContinueOnError: true       // Collect all diagnostics instead of stopping early
 );
 
+// Note: The current implementation processes each resource at most once per call,
+// so `DeduplicateIncludes` does not currently change output.
 var result = await preprocessor.ProcessAsync(root, context, options);
 ```
 
@@ -157,9 +171,20 @@ public sealed class JsonMergeStrategy : IMergeStrategy<JsonMergeOptions>
         // Custom merge logic here
         // Use mergeContext.SourceMapBuilder to record mappings
         // Use mergeContext.Diagnostics to report issues
+
+        return ReadOnlyMemory<char>.Empty;
     }
 }
 ```
+
+## Docs
+
+- [Core Abstractions](docs/01-core-abstractions.md)
+- [Diagnostics System](docs/02-diagnostics-system.md)
+- [Dependency Graph](docs/03-dependency-graph.md)
+- [Source Mapping](docs/04-source-mapping.md)
+- [Merge System](docs/05-merge-system.md)
+- [Preprocessor Orchestrator](docs/06-preprocessor-orchestrator.md)
 
 ## Architecture
 
