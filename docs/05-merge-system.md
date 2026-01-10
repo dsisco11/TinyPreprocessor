@@ -14,7 +14,7 @@ A resource paired with its parsed directives, ready for merging.
 
 ```
 record ResolvedResource(
-    Resource   : IResource<TSymbol>,
+    Resource   : IResource<TContent>,
     Directives : IReadOnlyList<TDirective>
 )
     // Convenience properties: Id, Content (delegate to Resource)
@@ -32,12 +32,13 @@ record ResolvedResource(
 Shared context provided to merge strategies for source map building and diagnostics.
 
 ```
-class MergeContext<TSymbol, TDirective>
+class MergeContext<TContent, TDirective>
     Properties:
         SourceMapBuilder : SourceMapBuilder   // for recording mappings
         Diagnostics      : DiagnosticCollection // for reporting issues
-        ResolvedCache    : IReadOnlyDictionary<ResourceId, IResource<TSymbol>>  // for cross-referencing
+        ResolvedCache    : IReadOnlyDictionary<ResourceId, IResource<TContent>>  // for cross-referencing
         DirectiveModel   : IDirectiveModel<TDirective>  // for interpreting directive locations
+        ContentModel     : IContentModel<TContent>  // for interpreting offsets + slicing content
 ```
 
 **Design Decisions:**
@@ -48,12 +49,12 @@ class MergeContext<TSymbol, TDirective>
 
 ---
 
-### IMergeStrategy<TSymbol, TDirective, TContext>
+### IMergeStrategy<TContent, TDirective, TContext>
 
 Interface for custom merge implementations.
 
 ```csharp
-public interface IMergeStrategy<TSymbol, TDirective, in TContext>
+public interface IMergeStrategy<TContent, TDirective, in TContext>
 {
     /// <summary>
     /// Merges resolved resources into a single output.
@@ -63,10 +64,10 @@ public interface IMergeStrategy<TSymbol, TDirective, in TContext>
     /// <param name="userContext">User-provided context for strategy customization.</param>
     /// <param name="context">Merge context with source map builder and diagnostics.</param>
     /// <returns>The merged content.</returns>
-    ReadOnlyMemory<TSymbol> Merge(
-        IReadOnlyList<ResolvedResource<TSymbol, TDirective>> orderedResources,
+    TContent Merge(
+        IReadOnlyList<ResolvedResource<TContent, TDirective>> orderedResources,
         TContext userContext,
-        MergeContext<TSymbol, TDirective> context);
+        MergeContext<TContent, TDirective> context);
 }
 ```
 
@@ -74,7 +75,7 @@ public interface IMergeStrategy<TSymbol, TDirective, in TContext>
 
 - **Generic TContext**: User-defined context for passing strategy-specific options
 - **Topological order**: Resources arrive dependencies-first; strategies can rely on this
-- **Returns ReadOnlyMemory<char>**: Matches content model; avoids string allocations
+- **Returns TContent**: Merge strategies own the output representation.
 
 ---
 

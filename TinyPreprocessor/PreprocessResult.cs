@@ -13,8 +13,8 @@ namespace TinyPreprocessor;
 /// <param name="Diagnostics">All collected diagnostics during processing.</param>
 /// <param name="ProcessedResources">The resources in topological order (dependencies first).</param>
 /// <param name="DependencyGraph">The dependency graph for downstream analysis.</param>
-public sealed record PreprocessResult<TSymbol>(
-    ReadOnlyMemory<TSymbol> Content,
+public sealed record PreprocessResult<TContent>(
+    TContent Content,
     SourceMap SourceMap,
     DiagnosticCollection Diagnostics,
     IReadOnlyList<ResourceId> ProcessedResources,

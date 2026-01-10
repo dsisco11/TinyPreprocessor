@@ -18,7 +18,7 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_SingleFileNoIncludes_ReturnsContent()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource<char>("main.txt", "Hello, World!".AsMemory());
+        var root = new Resource<ReadOnlyMemory<char>>("main.txt", "Hello, World!".AsMemory());
 
         var result = await preprocessor.ProcessAsync(root, new object());
 
@@ -30,11 +30,11 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_WithSimpleInclude_MergesCorrectly()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var header = new Resource<char>("header.txt", "Header content".AsMemory());
-        var main = new Resource<char>("main.txt", "#include header.txt\nMain content".AsMemory());
+        var header = new Resource<ReadOnlyMemory<char>>("header.txt", "Header content".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include header.txt\nMain content".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(header, null));
+        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(header, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -48,11 +48,11 @@ public sealed class PreprocessorIntegrationTests
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
         const string headerText = "H1\nH2";
-        var header = new Resource<char>("header.txt", headerText.AsMemory());
-        var main = new Resource<char>("main.txt", "#include header.txt\nM1".AsMemory());
+        var header = new Resource<ReadOnlyMemory<char>>("header.txt", headerText.AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include header.txt\nM1".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(header, null));
+        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(header, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -71,14 +71,14 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_MultiLevelIncludes_ProcessesAll()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var level2 = new Resource<char>("level2.txt", "Level 2".AsMemory());
-        var level1 = new Resource<char>("level1.txt", "#include level2.txt\nLevel 1".AsMemory());
-        var main = new Resource<char>("main.txt", "#include level1.txt\nMain".AsMemory());
+        var level2 = new Resource<ReadOnlyMemory<char>>("level2.txt", "Level 2".AsMemory());
+        var level1 = new Resource<ReadOnlyMemory<char>>("level1.txt", "#include level2.txt\nLevel 1".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include level1.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level2, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -96,14 +96,14 @@ public sealed class PreprocessorIntegrationTests
         const string level1Text = "#include level2.txt\nL1";
         const string mainText = "#include level1.txt\nM";
 
-        var level2 = new Resource<char>("level2.txt", level2Text.AsMemory());
-        var level1 = new Resource<char>("level1.txt", level1Text.AsMemory());
-        var main = new Resource<char>("main.txt", mainText.AsMemory());
+        var level2 = new Resource<ReadOnlyMemory<char>>("level2.txt", level2Text.AsMemory());
+        var level1 = new Resource<ReadOnlyMemory<char>>("level1.txt", level1Text.AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", mainText.AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level2, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -126,20 +126,20 @@ public sealed class PreprocessorIntegrationTests
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
 
-        var c = new Resource<char>("c.txt", "C1".AsMemory());
-        var a = new Resource<char>("a.txt", "#include c.txt\nA1".AsMemory());
-        var d = new Resource<char>("d.txt", "D1".AsMemory());
-        var b = new Resource<char>("b.txt", "#include d.txt\nB1".AsMemory());
-        var main = new Resource<char>("main.txt", "#include a.txt\n#include b.txt\nM1".AsMemory());
+        var c = new Resource<ReadOnlyMemory<char>>("c.txt", "C1".AsMemory());
+        var a = new Resource<ReadOnlyMemory<char>>("a.txt", "#include c.txt\nA1".AsMemory());
+        var d = new Resource<ReadOnlyMemory<char>>("d.txt", "D1".AsMemory());
+        var b = new Resource<ReadOnlyMemory<char>>("b.txt", "#include d.txt\nB1".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include a.txt\n#include b.txt\nM1".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(a, null));
-        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(b, null));
-        resolver.Setup(r => r.ResolveAsync("c.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(c, null));
-        resolver.Setup(r => r.ResolveAsync("d.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(d, null));
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(a, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(b, null));
+        resolver.Setup(r => r.ResolveAsync("c.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(c, null));
+        resolver.Setup(r => r.ResolveAsync("d.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(d, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -170,7 +170,7 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_BuildsSourceMap()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource<char>("source.txt", "Line 1\nLine 2".AsMemory());
+        var root = new Resource<ReadOnlyMemory<char>>("source.txt", "Line 1\nLine 2".AsMemory());
 
         var result = await preprocessor.ProcessAsync(root, new object());
 
@@ -182,10 +182,10 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_PopulatesDiagnostics()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource<char>("main.txt", "#include missing.txt\nContent".AsMemory());
+        var root = new Resource<ReadOnlyMemory<char>>("main.txt", "#include missing.txt\nContent".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("missing.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(null, 
+        resolver.Setup(r => r.ResolveAsync("missing.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(null, 
                 new ResolutionFailedDiagnostic("missing.txt", "File not found")));
 
         var result = await preprocessor.ProcessAsync(root, new object());
@@ -198,11 +198,11 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_TracksProcessedResources()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var dep = new Resource<char>("dep.txt", "Dependency".AsMemory());
-        var main = new Resource<char>("main.txt", "#include dep.txt\nMain".AsMemory());
+        var dep = new Resource<ReadOnlyMemory<char>>("dep.txt", "Dependency".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include dep.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("dep.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(dep, null));
+        resolver.Setup(r => r.ResolveAsync("dep.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(dep, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -219,13 +219,13 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_CircularDependency_ReportsDiagnostic()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var fileA = new Resource<char>("a.txt", "#include b.txt\nFile A".AsMemory());
-        var fileB = new Resource<char>("b.txt", "#include a.txt\nFile B".AsMemory());
+        var fileA = new Resource<ReadOnlyMemory<char>>("a.txt", "#include b.txt\nFile A".AsMemory());
+        var fileB = new Resource<ReadOnlyMemory<char>>("b.txt", "#include a.txt\nFile B".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(fileB, null));
-        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(fileA, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(fileB, null));
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(fileA, null));
 
         var result = await preprocessor.ProcessAsync(fileA, new object());
 
@@ -242,10 +242,10 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_SelfReference_ReportsDiagnostic()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var file = new Resource<char>("self.txt", "#include self.txt\nContent".AsMemory());
+        var file = new Resource<ReadOnlyMemory<char>>("self.txt", "#include self.txt\nContent".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("self.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(file, null));
+        resolver.Setup(r => r.ResolveAsync("self.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(file, null));
 
         var result = await preprocessor.ProcessAsync(file, new object());
 
@@ -260,13 +260,13 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_CircularDependency_ContinuesProcessing()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var fileA = new Resource<char>("a.txt", "#include b.txt\nContent A".AsMemory());
-        var fileB = new Resource<char>("b.txt", "#include a.txt\nContent B".AsMemory());
+        var fileA = new Resource<ReadOnlyMemory<char>>("a.txt", "#include b.txt\nContent A".AsMemory());
+        var fileB = new Resource<ReadOnlyMemory<char>>("b.txt", "#include a.txt\nContent B".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(fileB, null));
-        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(fileA, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(fileB, null));
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(fileA, null));
 
         var result = await preprocessor.ProcessAsync(fileA, new object());
 
@@ -282,17 +282,17 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_DeduplicationEnabled_IncludesOnlyOnce()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var shared = new Resource<char>("shared.txt", "SHARED".AsMemory());
-        var libA = new Resource<char>("libA.txt", "#include shared.txt\nLibA".AsMemory());
-        var libB = new Resource<char>("libB.txt", "#include shared.txt\nLibB".AsMemory());
-        var main = new Resource<char>("main.txt", "#include libA.txt\n#include libB.txt\nMain".AsMemory());
+        var shared = new Resource<ReadOnlyMemory<char>>("shared.txt", "SHARED".AsMemory());
+        var libA = new Resource<ReadOnlyMemory<char>>("libA.txt", "#include shared.txt\nLibA".AsMemory());
+        var libB = new Resource<ReadOnlyMemory<char>>("libB.txt", "#include shared.txt\nLibB".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include libA.txt\n#include libB.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(shared, null));
-        resolver.Setup(r => r.ResolveAsync("libA.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(libA, null));
-        resolver.Setup(r => r.ResolveAsync("libB.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(libB, null));
+        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(shared, null));
+        resolver.Setup(r => r.ResolveAsync("libA.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(libA, null));
+        resolver.Setup(r => r.ResolveAsync("libB.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(libB, null));
 
         var options = new PreprocessorOptions(DeduplicateIncludes: true);
         var result = await preprocessor.ProcessAsync(main, new object(), options);
@@ -309,11 +309,11 @@ public sealed class PreprocessorIntegrationTests
         // When deduplication is disabled, we still only include content once,
         // but we do revisit resources for dependency tracking purposes
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var shared = new Resource<char>("shared.txt", "SHARED".AsMemory());
-        var main = new Resource<char>("main.txt", "#include shared.txt\n#include shared.txt\nMain".AsMemory());
+        var shared = new Resource<ReadOnlyMemory<char>>("shared.txt", "SHARED".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include shared.txt\n#include shared.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(shared, null));
+        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(shared, null));
 
         var options = new PreprocessorOptions(DeduplicateIncludes: false);
         var result = await preprocessor.ProcessAsync(main, new object(), options);
@@ -338,20 +338,20 @@ public sealed class PreprocessorIntegrationTests
         var (preprocessor, resolver, _) = CreatePreprocessor();
 
         // Create a chain of includes that exceeds depth 3
-        var level3 = new Resource<char>("level3.txt", "#include level4.txt\nL3".AsMemory());
-        var level2 = new Resource<char>("level2.txt", "#include level3.txt\nL2".AsMemory());
-        var level1 = new Resource<char>("level1.txt", "#include level2.txt\nL1".AsMemory());
-        var level0 = new Resource<char>("level0.txt", "#include level1.txt\nL0".AsMemory());
-        var level4 = new Resource<char>("level4.txt", "L4".AsMemory());
+        var level3 = new Resource<ReadOnlyMemory<char>>("level3.txt", "#include level4.txt\nL3".AsMemory());
+        var level2 = new Resource<ReadOnlyMemory<char>>("level2.txt", "#include level3.txt\nL2".AsMemory());
+        var level1 = new Resource<ReadOnlyMemory<char>>("level1.txt", "#include level2.txt\nL1".AsMemory());
+        var level0 = new Resource<ReadOnlyMemory<char>>("level0.txt", "#include level1.txt\nL0".AsMemory());
+        var level4 = new Resource<ReadOnlyMemory<char>>("level4.txt", "L4".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
-        resolver.Setup(r => r.ResolveAsync("level3.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level3, null));
-        resolver.Setup(r => r.ResolveAsync("level4.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level4, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level3.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level3, null));
+        resolver.Setup(r => r.ResolveAsync("level4.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level4, null));
 
         var options = new PreprocessorOptions(MaxIncludeDepth: 3);
         var result = await preprocessor.ProcessAsync(level0, new object(), options);
@@ -368,14 +368,14 @@ public sealed class PreprocessorIntegrationTests
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
 
-        var level2 = new Resource<char>("level2.txt", "L2".AsMemory());
-        var level1 = new Resource<char>("level1.txt", "#include level2.txt\nL1".AsMemory());
-        var level0 = new Resource<char>("level0.txt", "#include level1.txt\nL0".AsMemory());
+        var level2 = new Resource<ReadOnlyMemory<char>>("level2.txt", "L2".AsMemory());
+        var level1 = new Resource<ReadOnlyMemory<char>>("level1.txt", "#include level2.txt\nL1".AsMemory());
+        var level0 = new Resource<ReadOnlyMemory<char>>("level0.txt", "#include level1.txt\nL0".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(level2, null));
 
         var options = new PreprocessorOptions(MaxIncludeDepth: 5);
         var result = await preprocessor.ProcessAsync(level0, new object(), options);
@@ -391,11 +391,11 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_MaxDepthZero_FailsOnFirstInclude()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var child = new Resource<char>("child.txt", "Child".AsMemory());
-        var main = new Resource<char>("main.txt", "#include child.txt\nMain".AsMemory());
+        var child = new Resource<ReadOnlyMemory<char>>("child.txt", "Child".AsMemory());
+        var main = new Resource<ReadOnlyMemory<char>>("main.txt", "#include child.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("child.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult<char>(child, null));
+        resolver.Setup(r => r.ResolveAsync("child.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(child, null));
 
         var options = new PreprocessorOptions(MaxIncludeDepth: 0);
         var result = await preprocessor.ProcessAsync(main, new object(), options);
@@ -415,13 +415,13 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_Cancelled_ThrowsOperationCancelledException()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource<char>("main.txt", "#include slow.txt\nContent".AsMemory());
+        var root = new Resource<ReadOnlyMemory<char>>("main.txt", "#include slow.txt\nContent".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("slow.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
-            .Returns(async (string _, IResource<char>? _, CancellationToken ct) =>
+        resolver.Setup(r => r.ResolveAsync("slow.txt", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, IResource<ReadOnlyMemory<char>>? _, CancellationToken ct) =>
             {
                 await Task.Delay(1000, ct);
-                return new ResourceResolutionResult<char>(new Resource<char>("slow.txt", "".AsMemory()), null);
+                return new ResourceResolutionResult<ReadOnlyMemory<char>>(new Resource<ReadOnlyMemory<char>>("slow.txt", "".AsMemory()), null);
             });
 
         using var cts = new CancellationTokenSource();
@@ -449,13 +449,13 @@ public sealed class PreprocessorIntegrationTests
     #region Test Infrastructure
 
     private static (
-        Preprocessor<char, TestIncludeDirective, object> Preprocessor,
-        Mock<IResourceResolver<char>> Resolver,
-        Mock<IDirectiveParser<char, TestIncludeDirective>> Parser)
+        Preprocessor<ReadOnlyMemory<char>, TestIncludeDirective, object> Preprocessor,
+        Mock<IResourceResolver<ReadOnlyMemory<char>>> Resolver,
+        Mock<IDirectiveParser<ReadOnlyMemory<char>, TestIncludeDirective>> Parser)
         CreatePreprocessor()
     {
-        var parser = new Mock<IDirectiveParser<char, TestIncludeDirective>>();
-        var resolver = new Mock<IResourceResolver<char>>();
+        var parser = new Mock<IDirectiveParser<ReadOnlyMemory<char>, TestIncludeDirective>>();
+        var resolver = new Mock<IResourceResolver<ReadOnlyMemory<char>>>();
         var mergeStrategy = new ConcatenatingMergeStrategy<TestIncludeDirective, object>();
 
         // Setup parser to find #include directives
@@ -480,11 +480,12 @@ public sealed class PreprocessorIntegrationTests
                 return directives;
             });
 
-        var preprocessor = new Preprocessor<char, TestIncludeDirective, object>(
+        var preprocessor = new Preprocessor<ReadOnlyMemory<char>, TestIncludeDirective, object>(
             parser.Object,
             new TestIncludeDirectiveModel(),
             resolver.Object,
-            mergeStrategy);
+            mergeStrategy,
+            new ReadOnlyMemoryCharContentModel());
 
         return (preprocessor, resolver, parser);
     }

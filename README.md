@@ -29,16 +29,17 @@ TinyPreprocessor is a small pipeline that:
 
 1. Parses directives from each resource.
 2. Uses `IDirectiveModel<TDirective>` to decide which directives represent dependencies (and where they are).
-3. Resolves dependencies via `IResourceResolver<TSymbol>` (building a dependency graph).
+3. Resolves dependencies via `IResourceResolver<TContent>` (building a dependency graph).
 4. Topologically orders resources (dependencies first).
-5. Merges them via `IMergeStrategy<TSymbol, TDirective, TContext>` while building a source map and collecting diagnostics.
+5. Merges them via `IMergeStrategy<TContent, TDirective, TContext>` while building a source map and collecting diagnostics.
 
 TinyPreprocessor requires four components:
 
-1. **`IDirectiveParser<TDirective>`** – Parses directives from resource content
+1. **`IDirectiveParser<TContent, TDirective>`** – Parses directives from resource content
 2. **`IDirectiveModel<TDirective>`** – Interprets directive locations and dependency references
-3. **`IResourceResolver<TSymbol>`** – Resolves references to actual resources
-4. **`IMergeStrategy<TSymbol, TDirective, TContext>`** – Combines resources into final output
+3. **`IResourceResolver<TContent>`** – Resolves references to actual resources
+4. **`IMergeStrategy<TContent, TDirective, TContext>`** – Combines resources into final output
+5. **`IContentModel<TContent>`** – Defines how offsets and slicing work for your `TContent`
 
 ### Example: Minimal In-Memory Includes
 
@@ -68,7 +69,7 @@ public sealed class IncludeDirectiveModel : IDirectiveModel<IncludeDirective>
 }
 
 // 3) Implement a tiny directive parser for lines like: #include other.txt
-public sealed class IncludeParser : IDirectiveParser<char, IncludeDirective>
+public sealed class IncludeParser : IDirectiveParser<ReadOnlyMemory<char>, IncludeDirective>
 {
     public IEnumerable<IncludeDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId)
     {
@@ -89,26 +90,26 @@ public sealed class IncludeParser : IDirectiveParser<char, IncludeDirective>
 }
 
 // 4) Implement an in-memory resolver.
-public sealed class InMemoryResolver : IResourceResolver<char>
+public sealed class InMemoryResolver : IResourceResolver<ReadOnlyMemory<char>>
 {
     private readonly IReadOnlyDictionary<ResourceId, string> _files;
 
     public InMemoryResolver(IReadOnlyDictionary<ResourceId, string> files) => _files = files;
 
-    public ValueTask<ResourceResolutionResult<char>> ResolveAsync(
+    public ValueTask<ResourceResolutionResult<ReadOnlyMemory<char>>> ResolveAsync(
         string reference,
-        IResource<char>? context,
+        IResource<ReadOnlyMemory<char>>? context,
         CancellationToken ct)
     {
         if (!_files.TryGetValue(new ResourceId(reference), out var content))
         {
-            return ValueTask.FromResult(new ResourceResolutionResult<char>(
+            return ValueTask.FromResult(new ResourceResolutionResult<ReadOnlyMemory<char>>(
                 null,
                 new ResolutionFailedDiagnostic(reference, $"Not found: {reference}")));
         }
 
-        var resource = new Resource<char>(reference, content.AsMemory());
-        return ValueTask.FromResult(new ResourceResolutionResult<char>(resource, null));
+        var resource = new Resource<ReadOnlyMemory<char>>(reference, content.AsMemory());
+        return ValueTask.FromResult(new ResourceResolutionResult<ReadOnlyMemory<char>>(resource, null));
     }
 }
 
@@ -124,9 +125,10 @@ var parser = new IncludeParser();
 var directiveModel = new IncludeDirectiveModel();
 var resolver = new InMemoryResolver(files);
 var merger = new ConcatenatingMergeStrategy<IncludeDirective, object>();
+var contentModel = new ReadOnlyMemoryCharContentModel();
 var context = new object();
-var preprocessor = new Preprocessor<char, IncludeDirective, object>(parser, directiveModel, resolver, merger);
-var root = new Resource<char>("main.txt", files["main.txt"].AsMemory());
+var preprocessor = new Preprocessor<ReadOnlyMemory<char>, IncludeDirective, object>(parser, directiveModel, resolver, merger, contentModel);
+var root = new Resource<ReadOnlyMemory<char>>("main.txt", files["main.txt"].AsMemory());
 
 var result = await preprocessor.ProcessAsync(root, context);
 
@@ -185,17 +187,17 @@ foreach (var range in ranges)
 
 ## Custom Merge Strategy
 
-Implement `IMergeStrategy<TSymbol, TDirective, TContext>` for custom output formatting:
+Implement `IMergeStrategy<TContent, TDirective, TContext>` for custom output formatting:
 
 ```csharp
 public sealed record JsonMergeOptions;
 
-public sealed class JsonMergeStrategy : IMergeStrategy<char, IncludeDirective, JsonMergeOptions>
+public sealed class JsonMergeStrategy : IMergeStrategy<ReadOnlyMemory<char>, IncludeDirective, JsonMergeOptions>
 {
     public ReadOnlyMemory<char> Merge(
-        IReadOnlyList<ResolvedResource<char, IncludeDirective>> orderedResources,
+        IReadOnlyList<ResolvedResource<ReadOnlyMemory<char>, IncludeDirective>> orderedResources,
         JsonMergeOptions userContext,
-        MergeContext<char, IncludeDirective> mergeContext)
+        MergeContext<ReadOnlyMemory<char>, IncludeDirective> mergeContext)
     {
         // Custom merge logic here
         // Use mergeContext.SourceMapBuilder to record mappings.

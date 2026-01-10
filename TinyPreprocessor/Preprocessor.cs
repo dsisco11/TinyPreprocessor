@@ -9,7 +9,7 @@ namespace TinyPreprocessor;
 /// <summary>
 /// The main orchestrator that coordinates the entire preprocessing pipeline.
 /// </summary>
-/// <typeparam name="TSymbol">The symbol type of resource content.</typeparam>
+/// <typeparam name="TContent">The content representation type of resource content.</typeparam>
 /// <typeparam name="TDirective">The type of directive parsed from resources.</typeparam>
 /// <typeparam name="TContext">User-defined context type for merge strategy customization.</typeparam>
 /// <remarks>
@@ -21,35 +21,40 @@ namespace TinyPreprocessor;
 /// The dependencies (parser, resolver, merger) should be thread-safe or documented otherwise.
 /// </para>
 /// </remarks>
-public sealed class Preprocessor<TSymbol, TDirective, TContext>
+public sealed class Preprocessor<TContent, TDirective, TContext>
 {
-    private readonly IDirectiveParser<TSymbol, TDirective> _parser;
+    private readonly IDirectiveParser<TContent, TDirective> _parser;
     private readonly IDirectiveModel<TDirective> _directiveModel;
-    private readonly IResourceResolver<TSymbol> _resolver;
-    private readonly IMergeStrategy<TSymbol, TDirective, TContext> _mergeStrategy;
+    private readonly IResourceResolver<TContent> _resolver;
+    private readonly IMergeStrategy<TContent, TDirective, TContext> _mergeStrategy;
+    private readonly IContentModel<TContent> _contentModel;
 
     /// <summary>
-    /// Initializes a new instance of <see cref="Preprocessor{TSymbol, TDirective, TContext}"/>.
+    /// Initializes a new instance of <see cref="Preprocessor{TContent, TDirective, TContext}"/>.
     /// </summary>
     /// <param name="parser">The directive parser for extracting directives from resources.</param>
     /// <param name="directiveModel">The directive model for interpreting directive locations and dependency references.</param>
     /// <param name="resolver">The resource resolver for resolving references.</param>
     /// <param name="mergeStrategy">The merge strategy for combining resources.</param>
+    /// <param name="contentModel">The content model for interpreting offsets and slicing content.</param>
     public Preprocessor(
-        IDirectiveParser<TSymbol, TDirective> parser,
+        IDirectiveParser<TContent, TDirective> parser,
         IDirectiveModel<TDirective> directiveModel,
-        IResourceResolver<TSymbol> resolver,
-        IMergeStrategy<TSymbol, TDirective, TContext> mergeStrategy)
+        IResourceResolver<TContent> resolver,
+        IMergeStrategy<TContent, TDirective, TContext> mergeStrategy,
+        IContentModel<TContent> contentModel)
     {
         ArgumentNullException.ThrowIfNull(parser);
         ArgumentNullException.ThrowIfNull(directiveModel);
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(mergeStrategy);
+        ArgumentNullException.ThrowIfNull(contentModel);
 
         _parser = parser;
         _directiveModel = directiveModel;
         _resolver = resolver;
         _mergeStrategy = mergeStrategy;
+        _contentModel = contentModel;
     }
 
     /// <summary>
@@ -60,8 +65,8 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
     /// <param name="options">Processing options, or <see langword="null"/> for defaults.</param>
     /// <param name="ct">A cancellation token to cancel the operation.</param>
     /// <returns>The preprocessing result containing merged content, source map, and diagnostics.</returns>
-    public async ValueTask<PreprocessResult<TSymbol>> ProcessAsync(
-        IResource<TSymbol> root,
+    public async ValueTask<PreprocessResult<TContent>> ProcessAsync(
+        IResource<TContent> root,
         TContext context,
         PreprocessorOptions? options = null,
         CancellationToken ct = default)
@@ -73,7 +78,7 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
         // Initialize per-call state
         var diagnostics = new DiagnosticCollection();
         var graph = new ResourceDependencyGraph();
-        var cache = new Dictionary<ResourceId, ResolvedResource<TSymbol, TDirective>>();
+        var cache = new Dictionary<ResourceId, ResolvedResource<TContent, TDirective>>();
         var sourceMapBuilder = new SourceMapBuilder();
 
         // Phase 1: Recursive resolution
@@ -88,11 +93,12 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
         // Phase 4: Merge
         var resolvedCache = cache.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Resource);
 
-        var mergeContext = new MergeContext<TSymbol, TDirective>(
+        var mergeContext = new MergeContext<TContent, TDirective>(
             sourceMapBuilder,
             diagnostics,
             resolvedCache,
-            _directiveModel);
+            _directiveModel,
+            _contentModel);
         var orderedResources = processingOrder
             .Where(id => cache.ContainsKey(id))
             .Select(id => cache[id])
@@ -101,7 +107,7 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
         var mergedContent = _mergeStrategy.Merge(orderedResources, context, mergeContext);
 
         // Phase 5: Build result
-        return new PreprocessResult<TSymbol>(
+        return new PreprocessResult<TContent>(
             mergedContent,
             sourceMapBuilder.Build(),
             diagnostics,
@@ -115,12 +121,12 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
     /// Recursively resolves a resource and its dependencies.
     /// </summary>
     private async ValueTask ResolveRecursiveAsync(
-        IResource<TSymbol> resource,
+        IResource<TContent> resource,
         int depth,
         PreprocessorOptions options,
         DiagnosticCollection diagnostics,
         ResourceDependencyGraph graph,
-        Dictionary<ResourceId, ResolvedResource<TSymbol, TDirective>> cache,
+        Dictionary<ResourceId, ResolvedResource<TContent, TDirective>> cache,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -138,7 +144,7 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
         var directives = _parser.Parse(resource.Content, resource.Id).ToList();
 
         // Cache the resolved resource
-        cache[resource.Id] = new ResolvedResource<TSymbol, TDirective>(resource, directives);
+        cache[resource.Id] = new ResolvedResource<TContent, TDirective>(resource, directives);
 
         // Process include directives
         foreach (var directive in directives)
@@ -249,7 +255,7 @@ public sealed class Preprocessor<TSymbol, TDirective, TContext>
     /// </summary>
     private static IReadOnlyList<ResourceId> GetProcessingOrder(
         ResourceDependencyGraph graph,
-        Dictionary<ResourceId, ResolvedResource<TSymbol, TDirective>> cache)
+        Dictionary<ResourceId, ResolvedResource<TContent, TDirective>> cache)
     {
         var order = graph.GetProcessingOrder();
 

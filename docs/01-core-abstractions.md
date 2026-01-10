@@ -51,18 +51,17 @@ public interface IResource
 **Design Decisions:**
 
 - **Interface**: Allows custom resource implementations (lazy-loaded, cached, virtual, etc.)
-- **ReadOnlyMemory<TSymbol>**: Efficient slicing without allocations, spans for processing
-
+- **TContent-generic**: The pipeline does not assume content is text or a sequence of symbols.
 - **Nullable Metadata**: Optional extensibility point for custom data (timestamps, checksums, etc.)
 
 **Default Implementation:**
 
 ```csharp
-public sealed record Resource<TSymbol>(
+public sealed record Resource<TContent>(
     ResourceId Id,
-    ReadOnlyMemory<TSymbol> Content,
+    TContent Content,
     IReadOnlyDictionary<string, object>? Metadata = null
-) : IResource<TSymbol>;
+) : IResource<TContent>;
 ```
 
 ---
@@ -94,12 +93,12 @@ public sealed record ImportDirective(string Module, bool IsRelative, Range Locat
 Resolves string references (from directives) into actual resources.
 
 ```csharp
-public interface IResourceResolver<TSymbol>
+public interface IResourceResolver<TContent>
 {
-    ValueTask<ResourceResolutionResult<TSymbol>> ResolveAsync(
+    ValueTask<ResourceResolutionResult<TContent>> ResolveAsync(
         string reference,
 
-        IResource<TSymbol>? relativeTo,
+        IResource<TContent>? relativeTo,
         CancellationToken ct);
 }
 ```
@@ -129,14 +128,14 @@ public sealed record ResourceResolutionResult(
 
 ---
 
-### IDirectiveParser<TSymbol, TDirective>
+### IDirectiveParser<TContent, TDirective>
 
 Extracts directives from resource content.
 
 ```csharp
-public interface IDirectiveParser<TSymbol, out TDirective>
+public interface IDirectiveParser<TContent, out TDirective>
 {
-    IEnumerable<TDirective> Parse(ReadOnlyMemory<TSymbol> content, ResourceId resourceId);
+    IEnumerable<TDirective> Parse(TContent content, ResourceId resourceId);
 }
 ```
 
@@ -150,7 +149,7 @@ public interface IDirectiveParser<TSymbol, out TDirective>
 **Example Implementation:**
 
 ```csharp
-public sealed class CStyleIncludeParser : IDirectiveParser<char, IncludeDirective>
+public sealed class CStyleIncludeParser : IDirectiveParser<ReadOnlyMemory<char>, IncludeDirective>
 {
     // Parses: #include "path" or #include <path>
     public IEnumerable<IncludeDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId)
@@ -187,5 +186,17 @@ flowchart LR
 
 1. **Custom Resource Types**: Implement `IResource` for lazy loading, caching, or virtual resources
 2. **Custom Directives**: Define any directive type + provide an `IDirectiveModel<TDirective>`
-3. **Custom Parsers**: Implement `IDirectiveParser<TSymbol, TDirective>` for different syntax styles
-4. **Custom Resolvers**: Implement `IResourceResolver<TSymbol>` for file systems, databases, or network resources
+3. **Custom Parsers**: Implement `IDirectiveParser<TContent, TDirective>` for different syntax styles
+4. **Custom Resolvers**: Implement `IResourceResolver<TContent>` for file systems, databases, or network resources
+
+### IContentModel<TContent>
+
+The pipeline measures and slices content using an `IContentModel<TContent>`. This defines what an "offset" means for your chosen `TContent`.
+
+```csharp
+public interface IContentModel<TContent>
+{
+    int GetLength(TContent content);
+    TContent Slice(TContent content, int start, int length);
+}
+```

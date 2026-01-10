@@ -5,11 +5,11 @@ namespace TinyPreprocessor.Core;
 /// <summary>
 /// Represents the result of a resource resolution operation.
 /// </summary>
-/// <typeparam name="TSymbol">The symbol type of the resolved resource content.</typeparam>
+/// <typeparam name="TContent">The content representation type of the resolved resource.</typeparam>
 /// <param name="Resource">The resolved resource, or null if resolution failed.</param>
 /// <param name="Error">The error diagnostic if resolution failed, or null on success.</param>
-public sealed record ResourceResolutionResult<TSymbol>(
-    IResource<TSymbol>? Resource,
+public sealed record ResourceResolutionResult<TContent>(
+    IResource<TContent>? Resource,
     IPreprocessorDiagnostic? Error)
 {
     /// <summary>
@@ -21,15 +21,15 @@ public sealed record ResourceResolutionResult<TSymbol>(
     /// Creates a successful resolution result.
     /// </summary>
     /// <param name="resource">The resolved resource.</param>
-    /// <returns>A successful <see cref="ResourceResolutionResult{TSymbol}"/>.</returns>
-    public static ResourceResolutionResult<TSymbol> Success(IResource<TSymbol> resource)
+    /// <returns>A successful <see cref="ResourceResolutionResult{TContent}"/>.</returns>
+    public static ResourceResolutionResult<TContent> Success(IResource<TContent> resource)
         => new(resource, null);
 
     /// <summary>
     /// Creates a failed resolution result.
     /// </summary>
     /// <param name="error">The error diagnostic describing the failure.</param>
-    /// <returns>A failed <see cref="ResourceResolutionResult{TSymbol}"/>.</returns>
-    public static ResourceResolutionResult<TSymbol> Failure(IPreprocessorDiagnostic error)
+    /// <returns>A failed <see cref="ResourceResolutionResult{TContent}"/>.</returns>
+    public static ResourceResolutionResult<TContent> Failure(IPreprocessorDiagnostic error)
         => new(null, error);
 }

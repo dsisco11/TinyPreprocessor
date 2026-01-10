@@ -7,7 +7,7 @@ namespace TinyPreprocessor.Core;
 /// Implementations may involve I/O operations (file system, network, database),
 /// hence the async-first design with <see cref="ValueTask{TResult}"/>.
 /// </remarks>
-public interface IResourceResolver<TSymbol>
+public interface IResourceResolver<TContent>
 {
     /// <summary>
     /// Resolves a reference string to an actual resource.
@@ -16,10 +16,10 @@ public interface IResourceResolver<TSymbol>
     /// <param name="relativeTo">The resource from which the reference is made, enabling relative resolution.</param>
     /// <param name="ct">A cancellation token to cancel the operation.</param>
     /// <returns>
-    /// A <see cref="ResourceResolutionResult{TSymbol}"/> containing either the resolved resource or an error diagnostic.
+    /// A <see cref="ResourceResolutionResult{TContent}"/> containing either the resolved resource or an error diagnostic.
     /// </returns>
-    ValueTask<ResourceResolutionResult<TSymbol>> ResolveAsync(
+    ValueTask<ResourceResolutionResult<TContent>> ResolveAsync(
         string reference,
-        IResource<TSymbol>? relativeTo,
+        IResource<TContent>? relativeTo,
         CancellationToken ct);
 }

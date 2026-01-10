@@ -1,194 +1,120 @@
 # Source Mapping Architecture
 
-This document describes the source mapping system that tracks the relationship between generated output positions and original resource positions.
+This document describes the offset-based source mapping system that tracks the relationship between generated output offsets and original resource offsets.
 
 ## Overview
 
-When multiple resources are merged into a single output, it's crucial to maintain a mapping back to the original sources. This enables:
+When multiple resources are merged into a single output, it's crucial to maintain a mapping back to the original sources. TinyPreprocessor uses **0-based offsets** throughout.
 
-- Error reporting with original file/line information
-- Debugger integration
-- IDE "go to definition" functionality
-- Accurate diagnostic location reporting
+This enables:
 
-The source map system uses **0-based** line and column numbers internally (matching standard source map conventions).
+- Precise diagnostics that can point back to an original resource + offset
+- Tooling that can translate slices of generated output to their origin
+
+**Important:** Offsets are measured in **content units**. For the default text pipeline (`TContent = ReadOnlyMemory<char>`), the unit is characters.
 
 ## Types
 
-### SourcePosition
+### OffsetSpan
 
-Represents a position within text content.
+Represents a half-open range of offsets: `[Start, End)`.
 
-```
-struct SourcePosition : IEquatable, IComparable
-    Properties:
-        Line   : int    // 0-based line number
-        Column : int    // 0-based column number
-
-    Methods:
-        ToOneBased() → (Line + 1, Column + 1)  // for display
-        CompareTo(other) → compare by line, then column
-
-    Operators: ==, !=, <, <=, >, >=
-
-    Validation: rejects negative line/column values
+```csharp
+public readonly record struct OffsetSpan(int Start, int End)
+{
+    public int Length => End - Start;
+}
 ```
 
-**Design Decisions:**
+### OffsetMappingSegment
 
-- **Readonly struct**: Value semantics, zero allocation on comparison
-- **0-based**: Matches standard source map spec; `ToOneBased()` for display
-- **IComparable**: Enables binary search in sorted collections
-- **Validation**: Negative values rejected at construction
+An exact mapping segment between a generated offset span and an original resource offset span.
 
----
-
-### SourceSpan
-
-Represents a range of text from start to end positions.
-
+```csharp
+public sealed record OffsetMappingSegment(
+    OffsetSpan Generated,
+    ResourceId OriginalResource,
+    OffsetSpan Original);
 ```
-struct SourceSpan : IEquatable
-    Properties:
-        Start : SourcePosition  // inclusive
-        End   : SourcePosition  // exclusive
-
-    Methods:
-        Contains(position) → true if position ∈ [Start, End)
-        Overlaps(other)    → true if spans intersect
-
-    Validation: End must be >= Start
-```
-
-**Design Decisions:**
-
-- **Exclusive end**: Consistent with Range, Span conventions; simplifies math
-- **Contains/Overlaps**: Common queries for position lookup
-
----
-
-### SourceMapping
-
-Maps a span in generated output to a span in an original resource.
-
-```
-record SourceMapping(
-    GeneratedSpan    : SourceSpan,
-    OriginalResource : ResourceId,
-    OriginalSpan     : SourceSpan
-)
-    Methods:
-        MapPosition(generatedPos) → SourcePosition?
-            // Returns corresponding original position
-            // null if generatedPos outside GeneratedSpan
-
-            Algorithm:
-                1. Calculate line/column delta from GeneratedSpan.Start
-                2. Apply delta to OriginalSpan.Start
-                3. Return translated position
-```
-
-**Design Decisions:**
-
-- **Sealed record**: Immutable, value equality, readable ToString
-- **Span-to-span mapping**: Supports multi-line content blocks
-- **MapPosition**: Handles position translation within spans
-
----
 
 ### SourceLocation
 
-Result of a source map query—identifies a position in an original resource.
+Result of a point query: identifies an original resource and original offset.
 
-```
-record SourceLocation(
-    Resource         : ResourceId,
-    OriginalPosition : SourcePosition
-)
-    // ToString() returns "path/file.txt:25:10" (1-based for display)
+```csharp
+public sealed record SourceLocation(ResourceId Resource, int OriginalOffset);
 ```
 
----
+### SourceRangeLocation
+
+Result of a range query: identifies original and generated spans for an overlapping region.
+
+```csharp
+public sealed record SourceRangeLocation(
+    ResourceId Resource,
+    int OriginalStartOffset,
+    int OriginalEndOffset,
+    int GeneratedStartOffset,
+    int GeneratedEndOffset);
+```
 
 ### SourceMap
 
-Immutable collection of mappings with efficient position lookup.
+Immutable collection of mapping segments with efficient lookup.
 
-```
-class SourceMap
-    // Mappings stored sorted by GeneratedSpan.Start for O(log n) lookup
-
-    Properties:
-        Mappings : IReadOnlyList<SourceMapping>  // sorted by generated position
-
-    Methods:
-        Query(generatedPosition) → SourceLocation?
-            // Binary search to find containing mapping
-            // Returns original resource + position, or null
-
-        GetMappingsForResource(resourceId) → IEnumerable<SourceMapping>
-            // Filter mappings by original resource
+```csharp
+public sealed class SourceMap
+{
+    public SourceLocation? Query(int generatedOffset);
+    public IReadOnlyList<SourceRangeLocation> QueryRangeByLength(int generatedStartOffset, int length);
+    public IReadOnlyList<SourceRangeLocation> QueryRangeByEnd(int generatedStartOffset, int generatedEndOffset);
+}
 ```
 
 **Design Decisions:**
 
-- **Sorted mappings**: Enables O(log n) position lookup
-- **Binary search**: Efficient for typical source maps (hundreds to thousands of mappings)
-- **Immutable**: Built once via SourceMapBuilder, then read-only
-
----
+- **Offset-based**: Simpler and more general than line/column mapping.
+- **Exact segments**: Supports precise mapping across resource boundaries.
 
 ### SourceMapBuilder
 
-Accumulates mappings during merge operations.
+Accumulates mapping segments during merge operations.
 
+```csharp
+public sealed class SourceMapBuilder
+{
+    public void AddOffsetSegment(ResourceId resource, int generatedStartOffset, int originalStartOffset, int length);
+    public SourceMap Build();
+    public void Clear();
+}
 ```
-class SourceMapBuilder
-    Methods:
-        AddMapping(mapping)                           → append SourceMapping
-        AddSegment(resource, generatedSpan, originalSpan) → convenience wrapper
-        AddLine(resource, generatedLine, originalLine)    → single-line mapping
-
-        Build() → SourceMap
-            // Sorts mappings by generated position
-            // Returns immutable SourceMap
-
-        Clear() → reset accumulated mappings
-```
-
----
 
 ## Usage During Merge
 
-```
-function Merge(resources, context) → content
-    for each resource in resources:
-        for each line in resource.Content:
-            context.SourceMapBuilder.AddLine(
-                resource.Id,
-                generatedLine: currentOutputLine,
-                originalLine: currentResourceLine
-            )
-            output.AppendLine(line)
+Merge strategies are responsible for adding mapping segments as they emit content:
 
-    return output
+```
+generatedStart = outputOffset
+emit N content units from resource X starting at original offset O
+builder.AddOffsetSegment(X, generatedStart, O, length: N)
 ```
 
 ## Query Example
 
+```csharp
+var result = await preprocessor.ProcessAsync(root, context);
+
+// Map generated offset 0 back to its origin
+var location = result.SourceMap.Query(generatedOffset: 0);
+
+if (location is not null)
+{
+    Console.WriteLine($"Originated from {location.Resource.Path} at original offset {location.OriginalOffset}");
+}
+
+// Query a generated range and map it back to original ranges
+var ranges = result.SourceMap.QueryRangeByLength(generatedStartOffset: 0, length: 20);
 ```
-// Map error at generated position back to original source
-result = preprocessor.ProcessAsync(root, context)
-
-errorPosition = SourcePosition(line: 150, column: 10)
-location = result.SourceMap.Query(errorPosition)
-
-if location exists:
-    print "Error in {location.Resource.Path} at line {location.Line}, column {location.Column}"
-    // Output: "Error in utils/helpers.txt at line 25, column 10"
-```
-
----
 
 ## Relationships
 
@@ -196,24 +122,12 @@ if location exists:
 flowchart TB
     SourceMapBuilder -->|builds| SourceMap
     SourceMap -->|query| SourceLocation
-    SourceMap -->|contains| SourceMapping
-    SourceMapping -->|uses| SourceSpan
-    SourceMapping -->|uses| SourcePosition
+    SourceMap -->|range query| SourceRangeLocation
+    SourceMap -->|contains| OffsetMappingSegment
+    OffsetMappingSegment -->|uses| OffsetSpan
 ```
-
-## Performance Characteristics
-
-| Operation  | Complexity | Notes            |
-| ---------- | ---------- | ---------------- |
-| AddMapping | O(1)       | List append      |
-| Build      | O(n log n) | Sort by position |
-| Query      | O(log n)   | Binary search    |
-
-For typical merged outputs (thousands of lines), queries complete in microseconds.
 
 ## Thread Safety
 
-- **SourcePosition, SourceSpan**: Immutable value types, fully thread-safe
-- **SourceMapping, SourceLocation**: Immutable records, fully thread-safe
-- **SourceMap**: Immutable after construction, fully thread-safe for queries
-- **SourceMapBuilder**: **Not thread-safe**; use one builder per merge operation
+- **SourceMap**: Immutable after construction, thread-safe for queries
+- **SourceMapBuilder**: Not thread-safe; use one builder per merge operation
