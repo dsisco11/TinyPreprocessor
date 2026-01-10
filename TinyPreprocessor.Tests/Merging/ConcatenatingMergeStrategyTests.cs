@@ -245,9 +245,10 @@ public sealed class ConcatenatingMergeStrategyTests
         strategy.Merge([resource], new object(), context);
         var sourceMap = context.SourceMapBuilder.Build();
 
-        // The "keep this" line should be mapped to original line 1
-        var mappings = sourceMap.Mappings.ToList();
-        Assert.NotEmpty(mappings);
+        var mapped = sourceMap.Query(new SourcePosition(0, 0));
+        Assert.NotNull(mapped);
+        Assert.Equal(new ResourceId("test.txt"), mapped.Resource);
+        Assert.Equal(1, mapped.OriginalPosition.Line);
     }
 
     #endregion

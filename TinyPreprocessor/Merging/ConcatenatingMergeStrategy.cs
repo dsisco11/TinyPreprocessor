@@ -66,7 +66,7 @@ public sealed class ConcatenatingMergeStrategy<TContext> : IMergeStrategy<TConte
             {
                 var marker = string.Format(_options.MarkerFormat, resource.Id.Path);
                 output.Append(marker);
-                currentOutputLine += CountLines(marker);
+                currentOutputLine += CountNewLines(marker);
             }
 
             // Strip directives and get the processed content with line mapping info
@@ -81,13 +81,13 @@ public sealed class ConcatenatingMergeStrategy<TContext> : IMergeStrategy<TConte
                 context.SourceMapBuilder);
 
             output.Append(strippedContent);
-            currentOutputLine += CountLines(strippedContent);
+            currentOutputLine += CountNewLines(strippedContent);
 
             // Add separator between resources (but not after the last one)
             if (i < orderedResources.Count - 1)
             {
                 output.Append(_options.Separator);
-                currentOutputLine += CountLines(_options.Separator);
+                currentOutputLine += CountNewLines(_options.Separator);
             }
         }
 
@@ -245,6 +245,28 @@ public sealed class ConcatenatingMergeStrategy<TContext> : IMergeStrategy<TConte
         if (text.Length > 0 && text[^1] != '\n')
         {
             count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Counts the number of newline characters in a string.
+    /// </summary>
+    private static int CountNewLines(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var c in text)
+        {
+            if (c == '\n')
+            {
+                count++;
+            }
         }
 
         return count;

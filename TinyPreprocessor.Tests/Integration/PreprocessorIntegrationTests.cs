@@ -2,6 +2,7 @@ using Moq;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.Diagnostics;
 using TinyPreprocessor.Merging;
+using TinyPreprocessor.SourceMaps;
 using Xunit;
 
 namespace TinyPreprocessor.Tests.Integration;
@@ -43,6 +44,27 @@ public sealed class PreprocessorIntegrationTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WithSimpleInclude_ProducesExactFlattenedOutputAndSourceMap()
+    {
+        var (preprocessor, resolver, _) = CreatePreprocessor();
+        var header = new Resource("header.txt", "H1\nH2".AsMemory());
+        var main = new Resource("main.txt", "#include header.txt\nM1".AsMemory());
+
+        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(header, null));
+
+        var result = await preprocessor.ProcessAsync(main, new object());
+
+        Assert.True(result.Success);
+        Assert.Equal("H1\nH2\n\nM1", result.Content.ToString());
+
+        AssertMapped(result.SourceMap, generatedLine: 0, generatedColumn: 0, expectedResource: "header.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, generatedLine: 1, generatedColumn: 1, expectedResource: "header.txt", expectedOriginalLine: 1, expectedOriginalColumn: 1);
+        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, generatedLine: 3, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+    }
+
+    [Fact]
     public async Task ProcessAsync_MultiLevelIncludes_ProcessesAll()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
@@ -61,6 +83,77 @@ public sealed class PreprocessorIntegrationTests
         Assert.Contains("Level 2", result.Content.ToString());
         Assert.Contains("Level 1", result.Content.ToString());
         Assert.Contains("Main", result.Content.ToString());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_MultiLevelIncludes_FlattensAndMapsNestedIncludesCorrectly()
+    {
+        var (preprocessor, resolver, _) = CreatePreprocessor();
+        var level2 = new Resource("level2.txt", "L2a\nL2b".AsMemory());
+        var level1 = new Resource("level1.txt", "#include level2.txt\nL1".AsMemory());
+        var main = new Resource("main.txt", "#include level1.txt\nM".AsMemory());
+
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(level2, null));
+
+        var result = await preprocessor.ProcessAsync(main, new object());
+
+        Assert.True(result.Success);
+        Assert.Equal("L2a\nL2b\n\nL1\n\nM", result.Content.ToString());
+
+        AssertMapped(result.SourceMap, generatedLine: 0, generatedColumn: 1, expectedResource: "level2.txt", expectedOriginalLine: 0, expectedOriginalColumn: 1);
+        AssertMapped(result.SourceMap, generatedLine: 1, generatedColumn: 0, expectedResource: "level2.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, generatedLine: 3, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, generatedLine: 4, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, generatedLine: 5, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_BranchingIncludes_FlattensAllAndMapsEachOriginWithoutAssumingOrder()
+    {
+        var (preprocessor, resolver, _) = CreatePreprocessor();
+
+        var c = new Resource("c.txt", "C1".AsMemory());
+        var a = new Resource("a.txt", "#include c.txt\nA1".AsMemory());
+        var d = new Resource("d.txt", "D1".AsMemory());
+        var b = new Resource("b.txt", "#include d.txt\nB1".AsMemory());
+        var main = new Resource("main.txt", "#include a.txt\n#include b.txt\nM1".AsMemory());
+
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(a, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(b, null));
+        resolver.Setup(r => r.ResolveAsync("c.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(c, null));
+        resolver.Setup(r => r.ResolveAsync("d.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult(d, null));
+
+        var result = await preprocessor.ProcessAsync(main, new object());
+
+        Assert.True(result.Success);
+
+        var content = result.Content.ToString();
+
+        Assert.DoesNotContain("#include", content);
+        Assert.Contains("C1", content);
+        Assert.Contains("A1", content);
+        Assert.Contains("D1", content);
+        Assert.Contains("B1", content);
+        Assert.Contains("M1", content);
+
+        // Within each branch, the transitive dependency should appear before its parent.
+        Assert.True(content.IndexOf("C1", StringComparison.Ordinal) < content.IndexOf("A1", StringComparison.Ordinal));
+        Assert.True(content.IndexOf("D1", StringComparison.Ordinal) < content.IndexOf("B1", StringComparison.Ordinal));
+
+        // Validate source mapping for each unique token without assuming a/b branch ordering.
+        AssertMappedAtToken(result.SourceMap, content, token: "C1", expectedResource: "c.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "A1", expectedResource: "a.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "D1", expectedResource: "d.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "B1", expectedResource: "b.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "M1", expectedResource: "main.txt", expectedOriginalLine: 2, expectedOriginalColumn: 0);
     }
 
     [Fact]
@@ -168,7 +261,7 @@ public sealed class PreprocessorIntegrationTests
         var result = await preprocessor.ProcessAsync(fileA, new object());
 
         // Processing should continue despite cycle (collect all diagnostics pattern)
-        Assert.NotNull(result.Content);
+        Assert.False(result.Content.IsEmpty);
     }
 
     #endregion
@@ -395,6 +488,59 @@ public sealed class PreprocessorIntegrationTests
             index += pattern.Length;
         }
         return count;
+    }
+
+    private static void AssertMapped(
+        SourceMap sourceMap,
+        int generatedLine,
+        int generatedColumn,
+        string expectedResource,
+        int expectedOriginalLine,
+        int expectedOriginalColumn)
+    {
+        var mapped = sourceMap.Query(new SourcePosition(generatedLine, generatedColumn));
+
+        Assert.NotNull(mapped);
+        Assert.Equal(new ResourceId(expectedResource), mapped.Resource);
+        Assert.Equal(expectedOriginalLine, mapped.OriginalPosition.Line);
+        Assert.Equal(expectedOriginalColumn, mapped.OriginalPosition.Column);
+    }
+
+    private static void AssertMappedAtToken(
+        SourceMap sourceMap,
+        string generatedContent,
+        string token,
+        string expectedResource,
+        int expectedOriginalLine,
+        int expectedOriginalColumn)
+    {
+        var position = FindPosition(generatedContent, token);
+        var mapped = sourceMap.Query(position);
+
+        Assert.NotNull(mapped);
+        Assert.Equal(new ResourceId(expectedResource), mapped.Resource);
+        Assert.Equal(expectedOriginalLine, mapped.OriginalPosition.Line);
+        Assert.Equal(expectedOriginalColumn, mapped.OriginalPosition.Column);
+    }
+
+    private static SourcePosition FindPosition(string text, string token)
+    {
+        var index = text.IndexOf(token, StringComparison.Ordinal);
+        Assert.True(index >= 0, $"Token '{token}' not found in generated output.");
+
+        var line = 0;
+        var lastNewLineIndex = -1;
+        for (var i = 0; i < index; i++)
+        {
+            if (text[i] == '\n')
+            {
+                line++;
+                lastNewLineIndex = i;
+            }
+        }
+
+        var column = index - (lastNewLineIndex + 1);
+        return new SourcePosition(line, column);
     }
 
     #endregion
