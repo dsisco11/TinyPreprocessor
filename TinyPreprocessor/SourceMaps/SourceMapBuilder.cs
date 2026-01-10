@@ -10,8 +10,6 @@ namespace TinyPreprocessor.SourceMaps;
 /// </summary>
 public sealed class SourceMapBuilder
 {
-    private readonly List<SourceMapping> _mappings = [];
-
     private readonly List<OffsetMappingSegment> _offsetSegments = [];
 
     private TextLineIndex? _generatedLineIndex;
@@ -46,16 +44,6 @@ public sealed class SourceMapBuilder
     #endregion
 
     /// <summary>
-    /// Adds a mapping to the builder.
-    /// </summary>
-    /// <param name="mapping">The source mapping to add.</param>
-    public void AddMapping(SourceMapping mapping)
-    {
-        ArgumentNullException.ThrowIfNull(mapping);
-        _mappings.Add(mapping);
-    }
-
-    /// <summary>
     /// Adds an exact offset-based mapping segment.
     /// </summary>
     /// <param name="resource">The original resource identifier.</param>
@@ -86,56 +74,17 @@ public sealed class SourceMapBuilder
     }
 
     /// <summary>
-    /// Adds a mapping segment with the specified details.
-    /// </summary>
-    /// <param name="resource">The original resource identifier.</param>
-    /// <param name="generatedSpan">The span in the generated output.</param>
-    /// <param name="originalSpan">The span in the original resource.</param>
-    public void AddSegment(ResourceId resource, SourceSpan generatedSpan, SourceSpan originalSpan)
-    {
-        _mappings.Add(new SourceMapping(generatedSpan, resource, originalSpan));
-    }
-
-    /// <summary>
-    /// Adds a single-line mapping.
-    /// </summary>
-    /// <param name="resource">The original resource identifier.</param>
-    /// <param name="generatedLine">The 0-based line number in the generated output.</param>
-    /// <param name="originalLine">The 0-based line number in the original resource.</param>
-    /// <param name="length">The length of the line (column count). Defaults to max value for full line coverage.</param>
-    public void AddLine(ResourceId resource, int generatedLine, int originalLine, int length = int.MaxValue)
-    {
-        var generatedSpan = new SourceSpan(
-            new SourcePosition(generatedLine, 0),
-            new SourcePosition(generatedLine, length));
-
-        var originalSpan = new SourceSpan(
-            new SourcePosition(originalLine, 0),
-            new SourcePosition(originalLine, length));
-
-        _mappings.Add(new SourceMapping(generatedSpan, resource, originalSpan));
-    }
-
-    /// <summary>
     /// Builds an immutable <see cref="SourceMap"/> from the accumulated mappings.
     /// </summary>
     /// <returns>A new <see cref="SourceMap"/> with mappings sorted by generated position.</returns>
     public SourceMap Build()
     {
-        var sortedMappings = _mappings
-            .OrderBy(m => m.GeneratedSpan.Start)
+        var segments = _offsetSegments
+            .OrderBy(s => s.GeneratedStart)
             .ToList()
             .AsReadOnly();
 
-        var segments = _offsetSegments.Count > 0
-            ? _offsetSegments
-                .OrderBy(s => s.GeneratedStart)
-                .ToList()
-                .AsReadOnly()
-            : TryBuildOffsetSegments(sortedMappings);
-
         return new SourceMap(
-            sortedMappings,
             segments,
             _generatedLineIndex,
             _originalLineIndexes.Count > 0 ? new Dictionary<ResourceId, TextLineIndex>(_originalLineIndexes) : null);
@@ -146,88 +95,8 @@ public sealed class SourceMapBuilder
     /// </summary>
     public void Clear()
     {
-        _mappings.Clear();
         _offsetSegments.Clear();
         _generatedLineIndex = null;
         _originalLineIndexes.Clear();
     }
-
-    #region Offset Segment Conversion
-
-    private static IReadOnlyList<OffsetMappingSegment> EmptySegments { get; } = Array.Empty<OffsetMappingSegment>();
-
-    private IReadOnlyList<OffsetMappingSegment> TryBuildOffsetSegments(IReadOnlyList<SourceMapping> mappings)
-    {
-        if (_generatedLineIndex is null || _originalLineIndexes.Count == 0 || mappings.Count == 0)
-        {
-            return EmptySegments;
-        }
-
-        var generatedIndex = _generatedLineIndex.Value;
-        var segments = new List<OffsetMappingSegment>(capacity: mappings.Count);
-
-        foreach (var mapping in mappings)
-        {
-            if (!_originalLineIndexes.TryGetValue(mapping.OriginalResource, out var originalIndex))
-            {
-                // Original resource index not registered; skip.
-                continue;
-            }
-
-            if (!TryToOffsetSpan(generatedIndex, mapping.GeneratedSpan, out var generatedOffsetSpan) ||
-                !TryToOffsetSpan(originalIndex, mapping.OriginalSpan, out var originalOffsetSpan))
-            {
-                // If spans cannot be converted, fall back to legacy SourceMapping queries.
-                return EmptySegments;
-            }
-
-            // Require equal lengths for exact mapping segments.
-            if (generatedOffsetSpan.Length != originalOffsetSpan.Length)
-            {
-                return EmptySegments;
-            }
-
-            segments.Add(new OffsetMappingSegment(generatedOffsetSpan, mapping.OriginalResource, originalOffsetSpan));
-        }
-
-        segments.Sort(static (a, b) => a.GeneratedStart.CompareTo(b.GeneratedStart));
-        return segments.AsReadOnly();
-    }
-
-    private static bool TryToOffsetSpan(TextLineIndex index, SourceSpan span, out OffsetSpan offsetSpan)
-    {
-        offsetSpan = default;
-
-        if (!TryToOffset(index, span.Start, isEnd: false, out var startOffset))
-        {
-            return false;
-        }
-
-        if (!TryToOffset(index, span.End, isEnd: true, out var endOffset))
-        {
-            return false;
-        }
-
-        offsetSpan = new OffsetSpan(startOffset, endOffset);
-        return true;
-    }
-
-    private static bool TryToOffset(TextLineIndex index, SourcePosition position, bool isEnd, out int offset)
-    {
-        offset = 0;
-
-        if (isEnd && position.Column == int.MaxValue)
-        {
-            if ((uint)position.Line >= (uint)index.LineCount)
-            {
-                return false;
-            }
-
-            position = new SourcePosition(position.Line, index.GetLineLength(position.Line));
-        }
-
-        return index.TryGetOffset(position, out offset);
-    }
-
-    #endregion
 }

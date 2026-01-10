@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.SourceMaps;
 using Xunit;
@@ -17,18 +18,23 @@ public sealed class SourceMapQueryTests
     {
         var builder = new SourceMapBuilder();
         ResourceId resource = "original.txt";
-        // Generated: line 0, columns 0-10 -> Original: line 5, columns 0-10
-        builder.AddSegment(
-            resource,
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)),
-            new SourceSpan(new SourcePosition(5, 0), new SourcePosition(5, 10)));
+
+        var generated = "0123456789";
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var originalContent = "AAAAAAAAAA";
+        var original = new Resource(resource, originalContent.AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource> { [resource] = original });
+
+        // Generated: offsets [0..10) -> Original: offsets [0..10)
+        builder.AddOffsetSegment(resource, generatedStartOffset: 0, originalStartOffset: 0, length: 10);
 
         var sourceMap = builder.Build();
         var result = sourceMap.Query(new SourcePosition(0, 5));
 
         Assert.NotNull(result);
         Assert.Equal(resource, result.Resource);
-        Assert.Equal(5, result.OriginalPosition.Line);
+        Assert.Equal(0, result.OriginalPosition.Line);
         Assert.Equal(5, result.OriginalPosition.Column);
     }
 
@@ -36,10 +42,16 @@ public sealed class SourceMapQueryTests
     public void Query_PositionAtMappingStart_ReturnsOriginalLocation()
     {
         var builder = new SourceMapBuilder();
-        builder.AddSegment(
-            "file.txt",
-            new SourceSpan(new SourcePosition(10, 0), new SourcePosition(10, 50)),
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 50)));
+
+        var generated = string.Join("\n", Enumerable.Range(0, 11).Select(i => i == 10 ? new string('G', 50) : ""));
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var original = new Resource("file.txt", new string('O', 50).AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource> { [original.Id] = original });
+
+        // generated line 10, col 0 is offset of the start of that line.
+        var generatedStartOffset = GetOffset(generated, new SourcePosition(10, 0));
+        builder.AddOffsetSegment("file.txt", generatedStartOffset, originalStartOffset: 0, length: 50);
 
         var sourceMap = builder.Build();
         var result = sourceMap.Query(new SourcePosition(10, 0));
@@ -53,10 +65,15 @@ public sealed class SourceMapQueryTests
     public void Query_PositionOutsideAllMappings_ReturnsNull()
     {
         var builder = new SourceMapBuilder();
-        builder.AddSegment(
-            "file.txt",
-            new SourceSpan(new SourcePosition(5, 0), new SourcePosition(5, 20)),
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 20)));
+
+        var generated = string.Join("\n", Enumerable.Range(0, 6).Select(i => i == 5 ? new string('G', 20) : ""));
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var original = new Resource("file.txt", new string('O', 20).AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource> { [original.Id] = original });
+
+        var start = GetOffset(generated, new SourcePosition(5, 0));
+        builder.AddOffsetSegment("file.txt", start, originalStartOffset: 0, length: 20);
 
         var sourceMap = builder.Build();
 
@@ -73,6 +90,8 @@ public sealed class SourceMapQueryTests
     public void Query_EmptySourceMap_ReturnsNull()
     {
         var builder = new SourceMapBuilder();
+        builder.SetGeneratedContent("".AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>());
         var sourceMap = builder.Build();
 
         var result = sourceMap.Query(new SourcePosition(0, 0));
@@ -84,9 +103,23 @@ public sealed class SourceMapQueryTests
     public void Query_MultipleMappings_FindsCorrectOne()
     {
         var builder = new SourceMapBuilder();
-        builder.AddLine("file1.txt", generatedLine: 0, originalLine: 10);
-        builder.AddLine("file2.txt", generatedLine: 1, originalLine: 20);
-        builder.AddLine("file3.txt", generatedLine: 2, originalLine: 30);
+
+        var generated = "XXXXXXXXXX\nYYYYYYYYYY\nZZZZZZZZZZ";
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var r1 = new Resource("file1.txt", "XXXXXXXXXX".AsMemory());
+        var r2 = new Resource("file2.txt", "YYYYYYYYYY".AsMemory());
+        var r3 = new Resource("file3.txt", "ZZZZZZZZZZ".AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
+        {
+            [r1.Id] = r1,
+            [r2.Id] = r2,
+            [r3.Id] = r3
+        });
+
+        builder.AddOffsetSegment("file1.txt", generatedStartOffset: GetOffset(generated, new SourcePosition(0, 0)), originalStartOffset: 0, length: 10);
+        builder.AddOffsetSegment("file2.txt", generatedStartOffset: GetOffset(generated, new SourcePosition(1, 0)), originalStartOffset: 0, length: 10);
+        builder.AddOffsetSegment("file3.txt", generatedStartOffset: GetOffset(generated, new SourcePosition(2, 0)), originalStartOffset: 0, length: 10);
 
         var sourceMap = builder.Build();
 
@@ -94,7 +127,7 @@ public sealed class SourceMapQueryTests
 
         Assert.NotNull(result);
         Assert.Equal(new ResourceId("file2.txt"), result.Resource);
-        Assert.Equal(20, result.OriginalPosition.Line);
+        Assert.Equal(0, result.OriginalPosition.Line);
     }
 
     [Fact]
@@ -102,10 +135,24 @@ public sealed class SourceMapQueryTests
     {
         var builder = new SourceMapBuilder();
 
-        // Add 100 mappings to test binary search
+        // Generated is 100 lines of single char plus newline.
+        var generatedLines = Enumerable.Range(0, 100).Select(_ => "XXXXXXXXXX");
+        var generated = string.Join("\n", generatedLines);
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var originals = new Dictionary<ResourceId, IResource>();
         for (var i = 0; i < 100; i++)
         {
-            builder.AddLine($"file{i}.txt", generatedLine: i, originalLine: i * 10);
+            var r = new Resource($"file{i}.txt", "XXXXXXXXXX".AsMemory());
+            originals[r.Id] = r;
+        }
+        builder.SetOriginalResources(originals);
+
+        // Add 100 offset segments.
+        for (var i = 0; i < 100; i++)
+        {
+            var offset = GetOffset(generated, new SourcePosition(i, 0));
+            builder.AddOffsetSegment($"file{i}.txt", offset, originalStartOffset: 0, length: 10);
         }
 
         var sourceMap = builder.Build();
@@ -114,7 +161,7 @@ public sealed class SourceMapQueryTests
         var result50 = sourceMap.Query(new SourcePosition(50, 5));
         Assert.NotNull(result50);
         Assert.Equal(new ResourceId("file50.txt"), result50.Resource);
-        Assert.Equal(500, result50.OriginalPosition.Line);
+        Assert.Equal(0, result50.OriginalPosition.Line);
 
         var result0 = sourceMap.Query(new SourcePosition(0, 0));
         Assert.NotNull(result0);
@@ -129,16 +176,15 @@ public sealed class SourceMapQueryTests
     public void Query_PositionBetweenMappings_ReturnsNull()
     {
         var builder = new SourceMapBuilder();
-        // Mapping at line 0
-        builder.AddSegment(
-            "file.txt",
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)),
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)));
-        // Mapping at line 5 (gap between line 1-4)
-        builder.AddSegment(
-            "file.txt",
-            new SourceSpan(new SourcePosition(5, 0), new SourcePosition(5, 10)),
-            new SourceSpan(new SourcePosition(10, 0), new SourcePosition(10, 10)));
+
+        var generated = string.Join("\n", Enumerable.Range(0, 6).Select(i => i == 0 || i == 5 ? new string('X', 10) : ""));
+        builder.SetGeneratedContent(generated.AsMemory());
+
+        var original = new Resource("file.txt", new string('O', 100).AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource> { [original.Id] = original });
+
+        builder.AddOffsetSegment("file.txt", GetOffset(generated, new SourcePosition(0, 0)), originalStartOffset: 0, length: 10);
+        builder.AddOffsetSegment("file.txt", GetOffset(generated, new SourcePosition(5, 0)), originalStartOffset: 50, length: 10);
 
         var sourceMap = builder.Build();
 
@@ -169,16 +215,10 @@ public sealed class SourceMapQueryTests
         });
 
         // Segment 1: generated [0..5) -> file1 [0..5)
-        builder.AddSegment(
-            resource1.Id,
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 5)),
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 5)));
+        builder.AddOffsetSegment(resource1.Id, generatedStartOffset: 0, originalStartOffset: 0, length: 5);
 
         // Segment 2: generated [10..15) -> file2 [0..5)
-        builder.AddSegment(
-            resource2.Id,
-            new SourceSpan(new SourcePosition(0, 10), new SourcePosition(0, 15)),
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 5)));
+        builder.AddOffsetSegment(resource2.Id, generatedStartOffset: 10, originalStartOffset: 0, length: 5);
 
         var sourceMap = builder.Build();
 
@@ -213,10 +253,7 @@ public sealed class SourceMapQueryTests
             [resource.Id] = resource
         });
 
-        builder.AddSegment(
-            resource.Id,
-            new SourceSpan(new SourcePosition(0, 3), new SourcePosition(0, 8)),
-            new SourceSpan(new SourcePosition(0, 7), new SourcePosition(0, 12)));
+        builder.AddOffsetSegment(resource.Id, generatedStartOffset: 3, originalStartOffset: 7, length: 5);
 
         var sourceMap = builder.Build();
 
@@ -228,86 +265,38 @@ public sealed class SourceMapQueryTests
 
     #endregion
 
-    #region GetMappingsForResource Tests
-
-    [Fact]
-    public void GetMappingsForResource_FiltersByResource()
+    private static int GetOffset(string text, SourcePosition position)
     {
-        var builder = new SourceMapBuilder();
-        builder.AddLine("file1.txt", 0, 0);
-        builder.AddLine("file2.txt", 1, 0);
-        builder.AddLine("file1.txt", 2, 1);
-        builder.AddLine("file2.txt", 3, 1);
+        var offset = 0;
+        var line = 0;
+        var column = 0;
 
-        var sourceMap = builder.Build();
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (line == position.Line && column == position.Column)
+            {
+                return offset;
+            }
 
-        var file1Mappings = sourceMap.GetMappingsForResource("file1.txt").ToList();
+            if (text[i] == '\n')
+            {
+                line++;
+                column = 0;
+            }
+            else
+            {
+                column++;
+            }
 
-        Assert.Equal(2, file1Mappings.Count);
-        Assert.All(file1Mappings, m => Assert.Equal(new ResourceId("file1.txt"), m.OriginalResource));
+            offset++;
+        }
+
+        // Allow querying at end of text.
+        if (line == position.Line && column == position.Column)
+        {
+            return offset;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(position));
     }
-
-    [Fact]
-    public void GetMappingsForResource_NoMatchingResource_ReturnsEmpty()
-    {
-        var builder = new SourceMapBuilder();
-        builder.AddLine("file1.txt", 0, 0);
-
-        var sourceMap = builder.Build();
-
-        var result = sourceMap.GetMappingsForResource("nonexistent.txt");
-
-        Assert.Empty(result);
-    }
-
-    #endregion
-
-    #region SourceMapping.MapPosition Tests
-
-    [Fact]
-    public void MapPosition_WithinSpan_MapsCorrectly()
-    {
-        var mapping = new SourceMapping(
-            new SourceSpan(new SourcePosition(10, 5), new SourcePosition(10, 25)),
-            "source.txt",
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 20)));
-
-        var result = mapping.MapPosition(new SourcePosition(10, 15));
-
-        Assert.NotNull(result);
-        // Column offset: 15 - 5 = 10, so original column = 0 + 10 = 10
-        Assert.Equal(0, result.Value.Line);
-        Assert.Equal(10, result.Value.Column);
-    }
-
-    [Fact]
-    public void MapPosition_OutsideSpan_ReturnsNull()
-    {
-        var mapping = new SourceMapping(
-            new SourceSpan(new SourcePosition(5, 0), new SourcePosition(5, 10)),
-            "source.txt",
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)));
-
-        var result = mapping.MapPosition(new SourcePosition(10, 0));
-
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void MapPosition_MultiLineMapping_MapsCorrectly()
-    {
-        var mapping = new SourceMapping(
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(5, 0)),
-            "source.txt",
-            new SourceSpan(new SourcePosition(10, 0), new SourcePosition(15, 0)));
-
-        // Query position on generated line 2
-        var result = mapping.MapPosition(new SourcePosition(2, 5));
-
-        Assert.NotNull(result);
-        // Line delta = 2, so original line = 10 + 2 = 12
-        Assert.Equal(12, result.Value.Line);
-    }
-
-    #endregion
 }

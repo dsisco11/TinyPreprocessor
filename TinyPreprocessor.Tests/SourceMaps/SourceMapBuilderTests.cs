@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.SourceMaps;
 using Xunit;
@@ -5,203 +6,54 @@ using Xunit;
 namespace TinyPreprocessor.Tests.SourceMaps;
 
 /// <summary>
-/// Unit tests for <see cref="SourceMapBuilder"/>.
+/// Unit tests for <see cref="SourceMapBuilder"/> using offset-based segments only.
 /// </summary>
 public sealed class SourceMapBuilderTests
 {
-    #region AddMapping Tests
-
     [Fact]
-    public void AddMapping_SingleMapping_AccumulatesCorrectly()
-    {
-        var builder = new SourceMapBuilder();
-        var mapping = new SourceMapping(
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)),
-            "test.txt",
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)));
-
-        builder.AddMapping(mapping);
-        var sourceMap = builder.Build();
-
-        Assert.Single(sourceMap.Mappings);
-        Assert.Equal(mapping, sourceMap.Mappings[0]);
-    }
-
-    [Fact]
-    public void AddMapping_MultipleMappings_AccumulatesAll()
-    {
-        var builder = new SourceMapBuilder();
-        var mapping1 = new SourceMapping(
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)),
-            "file1.txt",
-            new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 10)));
-        var mapping2 = new SourceMapping(
-            new SourceSpan(new SourcePosition(1, 0), new SourcePosition(1, 20)),
-            "file2.txt",
-            new SourceSpan(new SourcePosition(5, 0), new SourcePosition(5, 20)));
-
-        builder.AddMapping(mapping1);
-        builder.AddMapping(mapping2);
-        var sourceMap = builder.Build();
-
-        Assert.Equal(2, sourceMap.Mappings.Count);
-    }
-
-    [Fact]
-    public void AddMapping_NullMapping_ThrowsArgumentNullException()
+    public void Build_SortsOffsetSegmentsByGeneratedStart()
     {
         var builder = new SourceMapBuilder();
 
-        Assert.Throws<ArgumentNullException>(() => builder.AddMapping(null!));
-    }
+        var generated = "0123456789";
+        builder.SetGeneratedContent(generated.AsMemory());
 
-    #endregion
-
-    #region AddSegment Tests
-
-    [Fact]
-    public void AddSegment_CreatesMapping()
-    {
-        var builder = new SourceMapBuilder();
-        ResourceId resource = "source.txt";
-        var generatedSpan = new SourceSpan(new SourcePosition(0, 0), new SourcePosition(0, 15));
-        var originalSpan = new SourceSpan(new SourcePosition(10, 0), new SourcePosition(10, 15));
-
-        builder.AddSegment(resource, generatedSpan, originalSpan);
-        var sourceMap = builder.Build();
-
-        Assert.Single(sourceMap.Mappings);
-        var mapping = sourceMap.Mappings[0];
-        Assert.Equal(resource, mapping.OriginalResource);
-        Assert.Equal(generatedSpan, mapping.GeneratedSpan);
-        Assert.Equal(originalSpan, mapping.OriginalSpan);
-    }
-
-    #endregion
-
-    #region AddLine Tests
-
-    [Fact]
-    public void AddLine_CreatesSingleLineMapping()
-    {
-        var builder = new SourceMapBuilder();
-        ResourceId resource = "code.txt";
-
-        builder.AddLine(resource, generatedLine: 5, originalLine: 10, length: 50);
-        var sourceMap = builder.Build();
-
-        Assert.Single(sourceMap.Mappings);
-        var mapping = sourceMap.Mappings[0];
-        Assert.Equal(resource, mapping.OriginalResource);
-        Assert.Equal(5, mapping.GeneratedSpan.Start.Line);
-        Assert.Equal(10, mapping.OriginalSpan.Start.Line);
-    }
-
-    [Fact]
-    public void AddLine_MultipleLines_AccumulatesAll()
-    {
-        var builder = new SourceMapBuilder();
-        ResourceId resource = "multi.txt";
-
-        for (var i = 0; i < 10; i++)
+        var r1 = new Resource("a.txt", "xxxxx".AsMemory());
+        var r2 = new Resource("b.txt", "yyyyy".AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
         {
-            builder.AddLine(resource, generatedLine: i, originalLine: i * 2);
-        }
+            [r1.Id] = r1,
+            [r2.Id] = r2
+        });
 
-        var sourceMap = builder.Build();
+        builder.AddOffsetSegment(r2.Id, generatedStartOffset: 5, originalStartOffset: 0, length: 5);
+        builder.AddOffsetSegment(r1.Id, generatedStartOffset: 0, originalStartOffset: 0, length: 5);
 
-        Assert.Equal(10, sourceMap.Mappings.Count);
-    }
+        var map = builder.Build();
 
-    #endregion
+        var first = map.Query(new SourcePosition(0, 0));
+        var second = map.Query(new SourcePosition(0, 7));
 
-    #region Build Tests
-
-    [Fact]
-    public void Build_SortsMappingsByGeneratedPosition()
-    {
-        var builder = new SourceMapBuilder();
-
-        // Add mappings out of order
-        builder.AddLine("file.txt", generatedLine: 5, originalLine: 5);
-        builder.AddLine("file.txt", generatedLine: 1, originalLine: 1);
-        builder.AddLine("file.txt", generatedLine: 10, originalLine: 10);
-        builder.AddLine("file.txt", generatedLine: 3, originalLine: 3);
-
-        var sourceMap = builder.Build();
-
-        // Verify sorted order
-        Assert.Equal(1, sourceMap.Mappings[0].GeneratedSpan.Start.Line);
-        Assert.Equal(3, sourceMap.Mappings[1].GeneratedSpan.Start.Line);
-        Assert.Equal(5, sourceMap.Mappings[2].GeneratedSpan.Start.Line);
-        Assert.Equal(10, sourceMap.Mappings[3].GeneratedSpan.Start.Line);
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(r1.Id, first.Resource);
+        Assert.Equal(r2.Id, second.Resource);
     }
 
     [Fact]
-    public void Build_EmptyBuilder_ReturnsEmptySourceMap()
+    public void Clear_RemovesAllSegmentsAndIndexes()
     {
         var builder = new SourceMapBuilder();
-
-        var sourceMap = builder.Build();
-
-        Assert.Empty(sourceMap.Mappings);
-    }
-
-    [Fact]
-    public void Build_ReturnsImmutableSourceMap()
-    {
-        var builder = new SourceMapBuilder();
-        builder.AddLine("test.txt", 0, 0);
-
-        var sourceMap = builder.Build();
-
-        // Adding more mappings after build shouldn't affect the built source map
-        builder.AddLine("test.txt", 1, 1);
-
-        Assert.Single(sourceMap.Mappings);
-    }
-
-    #endregion
-
-    #region Clear Tests
-
-    [Fact]
-    public void Clear_RemovesAllMappings()
-    {
-        var builder = new SourceMapBuilder();
-        builder.AddLine("file1.txt", 0, 0);
-        builder.AddLine("file2.txt", 1, 1);
+        builder.SetGeneratedContent("abc".AsMemory());
+        builder.SetOriginalResources(new Dictionary<ResourceId, IResource>
+        {
+            [new ResourceId("x.txt")] = new Resource("x.txt", "abc".AsMemory())
+        });
+        builder.AddOffsetSegment("x.txt", generatedStartOffset: 0, originalStartOffset: 0, length: 3);
 
         builder.Clear();
-        var sourceMap = builder.Build();
+        var map = builder.Build();
 
-        Assert.Empty(sourceMap.Mappings);
+        Assert.Null(map.Query(new SourcePosition(0, 0)));
     }
-
-    #endregion
-
-    #region Accumulation Tests
-
-    [Fact]
-    public void Builder_AccumulatesFromMultipleSources()
-    {
-        var builder = new SourceMapBuilder();
-
-        // Simulate merging multiple files
-        builder.AddLine("header.h", generatedLine: 0, originalLine: 0);
-        builder.AddLine("header.h", generatedLine: 1, originalLine: 1);
-        builder.AddLine("utils.c", generatedLine: 2, originalLine: 0);
-        builder.AddLine("utils.c", generatedLine: 3, originalLine: 1);
-        builder.AddLine("main.c", generatedLine: 4, originalLine: 0);
-
-        var sourceMap = builder.Build();
-
-        Assert.Equal(5, sourceMap.Mappings.Count);
-
-        // Verify different resources are tracked
-        var resources = sourceMap.Mappings.Select(m => m.OriginalResource).Distinct().ToList();
-        Assert.Equal(3, resources.Count);
-    }
-
-    #endregion
 }

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using TinyPreprocessor.Core;
 
 namespace TinyPreprocessor.SourceMaps;
@@ -14,39 +13,32 @@ namespace TinyPreprocessor.SourceMaps;
 /// </remarks>
 public sealed class SourceMap
 {
-    private readonly IReadOnlyList<SourceMapping> _mappings;
-
     private readonly IReadOnlyList<OffsetMappingSegment> _segments;
     private readonly TextLineIndex? _generatedLineIndex;
     private readonly IReadOnlyDictionary<ResourceId, TextLineIndex>? _originalLineIndexes;
 
     /// <summary>
-    /// Initializes a new instance of <see cref="SourceMap"/> with the specified mappings.
+    /// Initializes a new instance of <see cref="SourceMap"/> with the specified offset segments.
     /// </summary>
-    /// <param name="mappings">The sorted list of mappings.</param>
+    /// <param name="segments">The sorted list of offset mapping segments.</param>
+    /// <param name="generatedLineIndex">Line index for converting generated positions to offsets.</param>
+    /// <param name="originalLineIndexes">Line indexes for converting original offsets to positions.</param>
     internal SourceMap(
-        IReadOnlyList<SourceMapping> mappings,
         IReadOnlyList<OffsetMappingSegment> segments,
         TextLineIndex? generatedLineIndex,
         IReadOnlyDictionary<ResourceId, TextLineIndex>? originalLineIndexes)
     {
-        _mappings = mappings;
         _segments = segments;
         _generatedLineIndex = generatedLineIndex;
         _originalLineIndexes = originalLineIndexes;
     }
 
     /// <summary>
-    /// Gets the source mappings sorted by generated position.
-    /// </summary>
-    public IReadOnlyList<SourceMapping> Mappings => _mappings;
-
-    /// <summary>
     /// Gets the offset-based mapping segments used for exact range mapping.
     /// </summary>
     /// <remarks>
     /// This is an implementation detail exposed for debugging and advanced scenarios.
-    /// The primary API surface is the set of <see cref="Query"/> overloads.
+    /// The primary API surface is the set of <see cref="Query(SourcePosition)"/> and range query overloads.
     /// </remarks>
     internal IReadOnlyList<OffsetMappingSegment> Segments => _segments;
 
@@ -59,25 +51,10 @@ public sealed class SourceMap
     /// </returns>
     public SourceLocation? Query(SourcePosition generatedPosition)
     {
-        // Prefer exact offset-based mapping when line indexes + segments are available.
         var ranges = Query(generatedPosition, length: 1);
-        if (ranges.Count == 0)
-        {
-            // Legacy fallback for maps built without registered content.
-            var mapping = FindMappingForPosition(generatedPosition);
-            if (mapping is null)
-            {
-                return null;
-            }
-
-            var originalPosition = mapping.MapPosition(generatedPosition);
-            return originalPosition.HasValue
-                ? new SourceLocation(mapping.OriginalResource, originalPosition.Value)
-                : null;
-        }
-
-        var first = ranges[0];
-        return new SourceLocation(first.Resource, first.OriginalStart);
+        return ranges.Count == 0
+            ? null
+            : new SourceLocation(ranges[0].Resource, ranges[0].OriginalStart);
     }
 
     /// <summary>
@@ -137,16 +114,6 @@ public sealed class SourceMap
 
         endOffset = Math.Min(endOffset, generatedIndex.TextLength);
         return QueryOffsetRange(new OffsetSpan(startOffset, endOffset));
-    }
-
-    /// <summary>
-    /// Gets all mappings for a specific original resource.
-    /// </summary>
-    /// <param name="resourceId">The resource identifier to filter by.</param>
-    /// <returns>An enumerable of mappings from the specified resource.</returns>
-    public IEnumerable<SourceMapping> GetMappingsForResource(ResourceId resourceId)
-    {
-        return _mappings.Where(m => m.OriginalResource == resourceId);
     }
 
     #region Offset-Based Query Core
@@ -252,43 +219,5 @@ public sealed class SourceMap
 
     #endregion
 
-    /// <summary>
-    /// Finds the mapping that contains the specified generated position using binary search.
-    /// </summary>
-    private SourceMapping? FindMappingForPosition(SourcePosition generatedPosition)
-    {
-        if (_mappings.Count == 0)
-        {
-            return null;
-        }
-
-        // Binary search for the rightmost mapping where Start <= generatedPosition
-        var left = 0;
-        var right = _mappings.Count - 1;
-        var result = -1;
-
-        while (left <= right)
-        {
-            var mid = left + (right - left) / 2;
-            var mapping = _mappings[mid];
-
-            if (mapping.GeneratedSpan.Start <= generatedPosition)
-            {
-                result = mid;
-                left = mid + 1;
-            }
-            else
-            {
-                right = mid - 1;
-            }
-        }
-
-        // Check if the found mapping actually contains the position
-        if (result >= 0 && _mappings[result].GeneratedSpan.Contains(generatedPosition))
-        {
-            return _mappings[result];
-        }
-
-        return null;
-    }
+    // Legacy SourceMapping/SourceSpan-based mapping has been removed.
 }

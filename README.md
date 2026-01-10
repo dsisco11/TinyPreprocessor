@@ -154,6 +154,16 @@ if (location is not null)
     var (line, col) = location.OriginalPosition.ToOneBased();
     Console.WriteLine($"Originated from {location.Resource.Path} at line {line}, column {col}");
 }
+
+// For precise diagnostic spans, query a range.
+// The range may map to multiple original resources (e.g., it crosses file boundaries).
+var ranges = result.SourceMap.Query(new SourcePosition(line: 49, column: 9), length: 20);
+
+foreach (var range in ranges)
+{
+    Console.WriteLine(
+        $"Generated [{range.GeneratedStart} - {range.GeneratedEnd}) -> {range.Resource.Path} [{range.OriginalStart} - {range.OriginalEnd})");
+}
 ```
 
 ## Custom Merge Strategy
@@ -169,7 +179,9 @@ public sealed class JsonMergeStrategy : IMergeStrategy<JsonMergeOptions>
         MergeContext mergeContext)
     {
         // Custom merge logic here
-        // Use mergeContext.SourceMapBuilder to record mappings
+        // Use mergeContext.SourceMapBuilder to record mappings.
+        // Use offset-based segments for precise mappings:
+        //   mergeContext.SourceMapBuilder.AddOffsetSegment(resourceId, generatedStartOffset, originalStartOffset, length)
         // Use mergeContext.Diagnostics to report issues
 
         return ReadOnlyMemory<char>.Empty;
