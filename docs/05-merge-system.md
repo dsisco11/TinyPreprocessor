@@ -14,8 +14,8 @@ A resource paired with its parsed directives, ready for merging.
 
 ```
 record ResolvedResource(
-    Resource   : IResource,
-    Directives : IReadOnlyList<IDirective>
+    Resource   : IResource<TSymbol>,
+    Directives : IReadOnlyList<TDirective>
 )
     // Convenience properties: Id, Content (delegate to Resource)
 ```
@@ -32,11 +32,12 @@ record ResolvedResource(
 Shared context provided to merge strategies for source map building and diagnostics.
 
 ```
-class MergeContext
+class MergeContext<TSymbol, TDirective>
     Properties:
         SourceMapBuilder : SourceMapBuilder   // for recording mappings
         Diagnostics      : DiagnosticCollection // for reporting issues
-        ResolvedCache    : IReadOnlyDictionary<ResourceId, IResource>  // for cross-referencing
+        ResolvedCache    : IReadOnlyDictionary<ResourceId, IResource<TSymbol>>  // for cross-referencing
+        DirectiveModel   : IDirectiveModel<TDirective>  // for interpreting directive locations
 ```
 
 **Design Decisions:**
@@ -47,12 +48,12 @@ class MergeContext
 
 ---
 
-### IMergeStrategy<TContext>
+### IMergeStrategy<TSymbol, TDirective, TContext>
 
 Interface for custom merge implementations.
 
 ```csharp
-public interface IMergeStrategy<in TContext>
+public interface IMergeStrategy<TSymbol, TDirective, in TContext>
 {
     /// <summary>
     /// Merges resolved resources into a single output.
@@ -62,10 +63,10 @@ public interface IMergeStrategy<in TContext>
     /// <param name="userContext">User-provided context for strategy customization.</param>
     /// <param name="context">Merge context with source map builder and diagnostics.</param>
     /// <returns>The merged content.</returns>
-    ReadOnlyMemory<char> Merge(
-        IReadOnlyList<ResolvedResource> orderedResources,
+    ReadOnlyMemory<TSymbol> Merge(
+        IReadOnlyList<ResolvedResource<TSymbol, TDirective>> orderedResources,
         TContext userContext,
-        MergeContext context);
+        MergeContext<TSymbol, TDirective> context);
 }
 ```
 
@@ -178,7 +179,8 @@ class ConditionalMergeStrategy : IMergeStrategy<Dictionary<string, bool>>
 
 ## Directive Stripping
 
-The default behavior strips directives from output. This is handled by examining `IDirective.Location`:
+The default behavior strips directives from output. This is handled by examining directive locations via
+`IDirectiveModel<TDirective>.GetLocation(...)`:
 
 ```mermaid
 flowchart LR

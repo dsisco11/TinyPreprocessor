@@ -48,29 +48,29 @@ record PreprocessResult
         Content            : ReadOnlyMemory<char>          // merged output
         SourceMap          : SourceMap                     // position mappings
         Diagnostics        : DiagnosticCollection          // all collected diagnostics
-        Success            : bool                          // true if no errors
         ProcessedResources : IReadOnlyList<ResourceId>     // in topological order
         DependencyGraph    : ResourceDependencyGraph       // for downstream analysis
 ```
 
 **Design Decisions:**
 
-- **Success property**: Quick check for usable output
+- Prefer checking `Diagnostics.HasErrors` for a quick "usable output" signal
 - **ProcessedResources**: Useful for cache invalidation, dependency tracking
 - **DependencyGraph exposed**: Enables downstream analysis (affected files, etc.)
 
 ---
 
-### Preprocessor<TDirective, TContext>
+### Preprocessor<TSymbol, TDirective, TContext>
 
 The main orchestrator class.
 
 ```
-class Preprocessor<TDirective, TContext> where TDirective : IDirective
+class Preprocessor<TSymbol, TDirective, TContext>
     Dependencies:
-        parser        : IDirectiveParser<TDirective>
-        resolver      : IResourceResolver
-        mergeStrategy : IMergeStrategy<TContext>
+        parser        : IDirectiveParser<TSymbol, TDirective>
+        directiveModel: IDirectiveModel<TDirective>
+        resolver      : IResourceResolver<TSymbol>
+        mergeStrategy : IMergeStrategy<TSymbol, TDirective, TContext>
 
     function ProcessAsync(root, context, options?, ct) → PreprocessResult
         options ← options ?? PreprocessorOptions.Default
@@ -167,19 +167,10 @@ cache[resource.Id] = ResolvedResource(resource, directives)
 
 ---
 
-## IIncludeDirective Convention
+## Include Convention (via IDirectiveModel)
 
-For the preprocessor to know which directives represent includes, use a marker interface:
-
-```
-interface IIncludeDirective : IDirective
-    Reference : string  // file path, module name, etc.
-
-// Example implementations
-record IncludeDirective(Reference, Location) : IIncludeDirective
-record ImportDirective(Module, IsRelative, Location) : IIncludeDirective
-    Reference = IsRelative ? "./{Module}" : Module
-```
+For the preprocessor to know which directives represent dependencies, provide an `IDirectiveModel<TDirective>`.
+This model extracts a `string` reference for directives that should trigger recursive resolution.
 
 ---
 
@@ -254,4 +245,4 @@ if originalLocation exists:
 2. **Custom IResourceResolver**: Load from any source (files, network, database)
 3. **Custom IMergeStrategy**: Control how resources combine
 4. **PreprocessorOptions**: Tune behavior for specific use cases
-5. **IIncludeDirective**: Define custom include semantics
+5. **IDirectiveModel**: Define custom include semantics

@@ -581,7 +581,7 @@ public sealed class PreprocessorIntegrationTests
 }
 
 /// <summary>
-/// Test implementation of IIncludeDirective for integration tests.
+/// Test include-like directive for integration tests.
 /// </summary>
 public sealed record TestIncludeDirective(string Reference, System.Range Location);
 

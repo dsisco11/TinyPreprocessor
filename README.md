@@ -28,8 +28,9 @@ dotnet add package TinyPreprocessor
 TinyPreprocessor requires three components:
 
 1. **`IDirectiveParser<TDirective>`** – Parses directives from resource content
-2. **`IResourceResolver`** – Resolves references to actual resources
-3. **`IMergeStrategy<TContext>`** – Combines resources into final output
+2. **`IDirectiveModel<TDirective>`** – Interprets directive locations and dependency references
+3. **`IResourceResolver<TSymbol>`** – Resolves references to actual resources
+4. **`IMergeStrategy<TSymbol, TDirective, TContext>`** – Combines resources into final output
 
 ### Example: Simple Include Directive
 
@@ -39,19 +40,27 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using TinyPreprocessor;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.Diagnostics;
-using TinyPreprocessor.Merging;
+using TinyPreprocessor.Text;
 
 // 1. Define your directive type
-public sealed record IncludeDirective(string Path, Range Location) : IIncludeDirective
+public sealed record IncludeDirective(string Reference, Range Location);
+
+// 2. Provide directive semantics to the pipeline
+public sealed class IncludeDirectiveModel : IDirectiveModel<IncludeDirective>
 {
-    public string Reference => Path;
+    public Range GetLocation(IncludeDirective directive) => directive.Location;
+
+    public bool TryGetReference(IncludeDirective directive, out string reference)
+    {
+        reference = directive.Reference;
+        return true;
+    }
 }
 
-// 2. Implement directive parser
-public sealed class IncludeParser : IDirectiveParser<IncludeDirective>
+// 3. Implement directive parser
+public sealed class IncludeParser : IDirectiveParser<char, IncludeDirective>
 {
     public IEnumerable<IncludeDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId)
     {
@@ -71,48 +80,49 @@ public sealed class IncludeParser : IDirectiveParser<IncludeDirective>
     }
 }
 
-// 3. Implement resource resolver
-public sealed class FileResolver : IResourceResolver
+// 4. Implement resource resolver
+public sealed class FileResolver : IResourceResolver<char>
 {
     private readonly string _basePath;
 
     public FileResolver(string basePath) => _basePath = basePath;
 
-    public ValueTask<ResourceResolutionResult> ResolveAsync(
+    public ValueTask<ResourceResolutionResult<char>> ResolveAsync(
         string reference,
-        IResource? context,
+        IResource<char>? context,
         CancellationToken ct)
     {
         var fullPath = Path.Combine(_basePath, reference);
 
         if (!File.Exists(fullPath))
         {
-            return ValueTask.FromResult(new ResourceResolutionResult(
+            return ValueTask.FromResult(new ResourceResolutionResult<char>(
                 null,
                 new ResolutionFailedDiagnostic(reference, $"File not found: {fullPath}")));
         }
 
         var content = File.ReadAllText(fullPath);
-        var resource = new Resource(reference, content.AsMemory());
-        return ValueTask.FromResult(new ResourceResolutionResult(resource, null));
+        var resource = new Resource<char>(reference, content.AsMemory());
+        return ValueTask.FromResult(new ResourceResolutionResult<char>(resource, null));
     }
 }
 
-// 4. Use the preprocessor
+    // 5. Use the preprocessor
 var parser = new IncludeParser();
+    var directiveModel = new IncludeDirectiveModel();
 var resolver = new FileResolver(@"C:\MyProject\src");
-var merger = new ConcatenatingMergeStrategy<object>();
+    var merger = new ConcatenatingMergeStrategy<IncludeDirective, object>();
 
 var context = new object();
 
-var preprocessor = new Preprocessor<IncludeDirective, object>(parser, resolver, merger);
+var preprocessor = new Preprocessor<char, IncludeDirective, object>(parser, directiveModel, resolver, merger);
 
 var rootContent = File.ReadAllText(@"C:\MyProject\src\main.txt");
-var root = new Resource("main.txt", rootContent.AsMemory());
+var root = new Resource<char>("main.txt", rootContent.AsMemory());
 
 var result = await preprocessor.ProcessAsync(root, context);
 
-if (result.Success)
+if (!result.Diagnostics.HasErrors)
 {
     Console.WriteLine(result.Content.ToString());
 }
@@ -204,8 +214,8 @@ public sealed class JsonMergeStrategy : IMergeStrategy<JsonMergeOptions>
 ┌─────────────────────────────────────────────────────────────┐
 │                      Preprocessor                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ IDirective   │  │ IResource    │  │ IMergeStrategy   │  │
-│  │ Parser       │  │ Resolver     │  │                  │  │
+│  │ Directive    │  │ IResource<T> │  │ IMergeStrategy   │  │
+│  │ Parser/Model │  │ Resolver     │  │                  │  │
 │  └──────────────┘  └──────────────┘  └──────────────────┘  │
 │          │                │                   │             │
 │          ▼                ▼                   ▼             │

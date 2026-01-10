@@ -314,7 +314,7 @@ public sealed class ConcatenatingMergeStrategyTests
             new TestDirectiveModel());
     }
 
-    private sealed record TestDirective(Range Location) : IDirective;
+    private sealed record TestDirective(Range Location);
 
     private sealed class TestDirectiveModel : IDirectiveModel<TestDirective>
     {

@@ -51,45 +51,40 @@ public interface IResource
 **Design Decisions:**
 
 - **Interface**: Allows custom resource implementations (lazy-loaded, cached, virtual, etc.)
-- **ReadOnlyMemory<char>**: Efficient slicing without allocations, spans for processing
+- **ReadOnlyMemory<TSymbol>**: Efficient slicing without allocations, spans for processing
 
 - **Nullable Metadata**: Optional extensibility point for custom data (timestamps, checksums, etc.)
 
 **Default Implementation:**
 
 ```csharp
-public sealed record Resource(
+public sealed record Resource<TSymbol>(
     ResourceId Id,
-    ReadOnlyMemory<char> Content,
+    ReadOnlyMemory<TSymbol> Content,
     IReadOnlyDictionary<string, object>? Metadata = null
-) : IResource;
+) : IResource<TSymbol>;
 ```
 
 ---
 
-### IDirective
+### Directives (TDirective) + IDirectiveModel
 
-Marker interface for parsed directives found within resource content.
+Directives are modeled as an unconstrained `TDirective` type. Directive semantics needed by the pipeline
+(location + dependency reference extraction) are provided via `IDirectiveModel<TDirective>`.
 
 ```csharp
-public interface IDirective
+public interface IDirectiveModel<in TDirective>
 {
-    Range Location { get; }
-
+    Range GetLocation(TDirective directive);
+    bool TryGetReference(TDirective directive, out string reference);
 }
 ```
 
-**Design Decisions:**
-
-- **Marker interface**: Downstream users define their own directive types (IncludeDirective, ImportDirective, etc.)
-- **Range Location**: Uses System.Range for efficient content slicing; indicates where the directive appears in source
-- **No reference property**: The meaning of "what to include" is directive-specific
-
-**Example Implementation:**
+**Example Directive Types:**
 
 ```csharp
-public sealed record IncludeDirective(string Reference, Range Location) : IDirective;
-public sealed record ImportDirective(string Module, bool IsRelative, Range Location) : IDirective;
+public sealed record IncludeDirective(string Reference, Range Location);
+public sealed record ImportDirective(string Module, bool IsRelative, Range Location);
 ```
 
 ---
@@ -99,12 +94,12 @@ public sealed record ImportDirective(string Module, bool IsRelative, Range Locat
 Resolves string references (from directives) into actual resources.
 
 ```csharp
-public interface IResourceResolver
+public interface IResourceResolver<TSymbol>
 {
-    ValueTask<ResourceResolutionResult> ResolveAsync(
+    ValueTask<ResourceResolutionResult<TSymbol>> ResolveAsync(
         string reference,
 
-        IResource? relativeTo,
+        IResource<TSymbol>? relativeTo,
         CancellationToken ct);
 }
 ```
@@ -134,14 +129,14 @@ public sealed record ResourceResolutionResult(
 
 ---
 
-### IDirectiveParser<TDirective>
+### IDirectiveParser<TSymbol, TDirective>
 
 Extracts directives from resource content.
 
 ```csharp
-public interface IDirectiveParser<TDirective> where TDirective : IDirective
+public interface IDirectiveParser<TSymbol, out TDirective>
 {
-    IEnumerable<TDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId);
+    IEnumerable<TDirective> Parse(ReadOnlyMemory<TSymbol> content, ResourceId resourceId);
 }
 ```
 
@@ -155,7 +150,7 @@ public interface IDirectiveParser<TDirective> where TDirective : IDirective
 **Example Implementation:**
 
 ```csharp
-public sealed class CStyleIncludeParser : IDirectiveParser<IncludeDirective>
+public sealed class CStyleIncludeParser : IDirectiveParser<char, IncludeDirective>
 {
     // Parses: #include "path" or #include <path>
     public IEnumerable<IncludeDirective> Parse(ReadOnlyMemory<char> content, ResourceId resourceId)
@@ -177,7 +172,7 @@ flowchart LR
     end
 
     subgraph Parsing
-        IDirectiveParserT["IDirectiveParser&lt;T&gt;"] -->|extracts| IDirective
+        IDirectiveParserT["IDirectiveParser&lt;T&gt;"] -->|extracts| TDirective
     end
 ```
 
@@ -191,6 +186,6 @@ flowchart LR
 ## Extension Points
 
 1. **Custom Resource Types**: Implement `IResource` for lazy loading, caching, or virtual resources
-2. **Custom Directives**: Define directive records implementing `IDirective`
-3. **Custom Parsers**: Implement `IDirectiveParser<T>` for different syntax styles
-4. **Custom Resolvers**: Implement `IResourceResolver` for file systems, databases, or network resources
+2. **Custom Directives**: Define any directive type + provide an `IDirectiveModel<TDirective>`
+3. **Custom Parsers**: Implement `IDirectiveParser<TSymbol, TDirective>` for different syntax styles
+4. **Custom Resolvers**: Implement `IResourceResolver<TSymbol>` for file systems, databases, or network resources
