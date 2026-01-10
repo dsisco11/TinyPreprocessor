@@ -55,7 +55,7 @@ public sealed class SourceMap
     /// Queries the source map for all original ranges corresponding to a generated range.
     /// </summary>
     /// <param name="generatedStartOffset">Inclusive start offset in the generated output.</param>
-    /// <param name="length">Length of the generated range (in symbols).</param>
+    /// <param name="length">Length of the generated range (in content units).</param>
     /// <returns>Zero or more exact mappings. Unmapped gaps are omitted.</returns>
     public IReadOnlyList<SourceRangeLocation> QueryRangeByLength(int generatedStartOffset, int length)
     {

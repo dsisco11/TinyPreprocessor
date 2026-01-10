@@ -4,7 +4,7 @@ using Xunit;
 namespace TinyPreprocessor.Tests.Core;
 
 /// <summary>
-/// Unit tests for <see cref="Resource{TSymbol}"/>.
+/// Unit tests for <see cref="Resource{TContent}"/>.
 /// </summary>
 public sealed class ResourceTests
 {
@@ -17,7 +17,7 @@ public sealed class ResourceTests
         var content = "Hello, World!".AsMemory();
         var metadata = new Dictionary<string, object> { ["key"] = "value" };
 
-        var resource = new Resource<char>(id, content, metadata);
+        var resource = new Resource<ReadOnlyMemory<char>>(id, content, metadata);
 
         Assert.Equal(id, resource.Id);
         Assert.Equal("Hello, World!", resource.Content.ToString());
@@ -31,7 +31,7 @@ public sealed class ResourceTests
         var id = new ResourceId("test.txt");
         var content = "Content".AsMemory();
 
-        var resource = new Resource<char>(id, content);
+        var resource = new Resource<ReadOnlyMemory<char>>(id, content);
 
         Assert.Null(resource.Metadata);
     }
@@ -42,7 +42,7 @@ public sealed class ResourceTests
         var id = new ResourceId("empty.txt");
         var content = ReadOnlyMemory<char>.Empty;
 
-        var resource = new Resource<char>(id, content);
+        var resource = new Resource<ReadOnlyMemory<char>>(id, content);
 
         Assert.True(resource.Content.IsEmpty);
     }
@@ -55,9 +55,9 @@ public sealed class ResourceTests
     public void Id_ReturnsResourceId()
     {
         ResourceId id = "resource/path.txt";
-        var resource = new Resource<char>(id, "content".AsMemory());
+        var resource = new Resource<ReadOnlyMemory<char>>(id, "content".AsMemory());
 
-        IResource<char> iResource = resource;
+        IResource<ReadOnlyMemory<char>> iResource = resource;
 
         Assert.Equal(id, iResource.Id);
     }
@@ -66,7 +66,7 @@ public sealed class ResourceTests
     public void Content_ReturnsReadOnlyMemory()
     {
         const string contentString = "Test content with special chars: éàü";
-        var resource = new Resource<char>("test.txt", contentString.AsMemory());
+        var resource = new Resource<ReadOnlyMemory<char>>("test.txt", contentString.AsMemory());
 
         Assert.Equal(contentString, resource.Content.ToString());
     }
@@ -79,8 +79,8 @@ public sealed class ResourceTests
     public void Equals_SameIdAndContent_ReturnsTrue()
     {
         var content = "Same content".AsMemory();
-        var resource1 = new Resource<char>("file.txt", content);
-        var resource2 = new Resource<char>("file.txt", content);
+        var resource1 = new Resource<ReadOnlyMemory<char>>("file.txt", content);
+        var resource2 = new Resource<ReadOnlyMemory<char>>("file.txt", content);
 
         // Records compare by value for properties
         Assert.Equal(resource1.Id, resource2.Id);
@@ -90,8 +90,8 @@ public sealed class ResourceTests
     public void Equals_DifferentId_ReturnsFalse()
     {
         var content = "Content".AsMemory();
-        var resource1 = new Resource<char>("file1.txt", content);
-        var resource2 = new Resource<char>("file2.txt", content);
+        var resource1 = new Resource<ReadOnlyMemory<char>>("file1.txt", content);
+        var resource2 = new Resource<ReadOnlyMemory<char>>("file2.txt", content);
 
         Assert.NotEqual(resource1.Id, resource2.Id);
     }
@@ -99,7 +99,7 @@ public sealed class ResourceTests
     [Fact]
     public void With_CreatesModifiedCopy()
     {
-        var original = new Resource<char>("original.txt", "original content".AsMemory());
+        var original = new Resource<ReadOnlyMemory<char>>("original.txt", "original content".AsMemory());
         var newContent = "new content".AsMemory();
 
         var modified = original with { Content = newContent };
@@ -123,7 +123,7 @@ public sealed class ResourceTests
             ["IsGenerated"] = true
         };
 
-        var resource = new Resource<char>("test.txt", "content".AsMemory(), metadata);
+        var resource = new Resource<ReadOnlyMemory<char>>("test.txt", "content".AsMemory(), metadata);
 
         Assert.Equal("Test Author", resource.Metadata!["Author"]);
         Assert.Equal(42, resource.Metadata["LineCount"]);
@@ -134,7 +134,7 @@ public sealed class ResourceTests
     public void Metadata_IsReadOnly()
     {
         var metadata = new Dictionary<string, object> { ["key"] = "value" };
-        var resource = new Resource<char>("test.txt", "content".AsMemory(), metadata);
+        var resource = new Resource<ReadOnlyMemory<char>>("test.txt", "content".AsMemory(), metadata);
 
         // IReadOnlyDictionary doesn't have Add method
         Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(resource.Metadata);

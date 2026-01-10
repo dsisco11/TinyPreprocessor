@@ -4,7 +4,7 @@ This document describes the main `Preprocessor` class that orchestrates the enti
 
 ## Overview
 
-The `Preprocessor<TDirective, TContext>` class is the primary entry point for consumers. It coordinates:
+The `Preprocessor<TContent, TDirective, TContext>` class is the primary entry point for consumers. It coordinates:
 
 1. Recursive resource resolution
 2. Directive parsing
@@ -45,7 +45,7 @@ The result of preprocessing, containing merged output and metadata.
 ```
 record PreprocessResult
     Properties:
-        Content            : ReadOnlyMemory<char>          // merged output
+        Content            : TContent                      // merged output
         SourceMap          : SourceMap                     // position mappings
         Diagnostics        : DiagnosticCollection          // all collected diagnostics
         ProcessedResources : IReadOnlyList<ResourceId>     // in topological order
@@ -60,17 +60,18 @@ record PreprocessResult
 
 ---
 
-### Preprocessor<TSymbol, TDirective, TContext>
+### Preprocessor<TContent, TDirective, TContext>
 
 The main orchestrator class.
 
 ```
-class Preprocessor<TSymbol, TDirective, TContext>
+class Preprocessor<TContent, TDirective, TContext>
     Dependencies:
-        parser        : IDirectiveParser<TSymbol, TDirective>
+        parser        : IDirectiveParser<TContent, TDirective>
         directiveModel: IDirectiveModel<TDirective>
-        resolver      : IResourceResolver<TSymbol>
-        mergeStrategy : IMergeStrategy<TSymbol, TDirective, TContext>
+        resolver      : IResourceResolver<TContent>
+        mergeStrategy : IMergeStrategy<TContent, TDirective, TContext>
+        contentModel  : IContentModel<TContent>
 
     function ProcessAsync(root, context, options?, ct) → PreprocessResult
         options ← options ?? PreprocessorOptions.Default
@@ -91,7 +92,7 @@ class Preprocessor<TSymbol, TDirective, TContext>
         processingOrder ← GetProcessingOrder(graph, diagnostics)
 
         // Phase 4: Merge
-        mergeContext ← new MergeContext(sourceMapBuilder, diagnostics, cache)
+        mergeContext ← new MergeContext(sourceMapBuilder, diagnostics, cache, directiveModel, contentModel)
         orderedResources ← processingOrder.Select(id → cache[id])
         mergedContent ← mergeStrategy.Merge(orderedResources, context, mergeContext)
 

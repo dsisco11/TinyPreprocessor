@@ -47,7 +47,7 @@ public sealed class ConcatenatingMergeStrategyTests
     public void Merge_EmptyResources_ReturnsEmpty()
     {
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
-        var resources = new List<ResolvedResource<char, TestDirective>>();
+        var resources = new List<ResolvedResource<ReadOnlyMemory<char>, TestDirective>>();
         var context = CreateMergeContext();
 
         var result = strategy.Merge(resources, new object(), context);
@@ -96,8 +96,8 @@ public sealed class ConcatenatingMergeStrategyTests
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
         var content = "Line 1\n#include <header.h>\nLine 3";
         var directive = new TestDirective(7..26); // The #include directive
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>("test.txt", content.AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>("test.txt", content.AsMemory()),
             new[] { directive });
         var context = CreateMergeContext();
 
@@ -116,8 +116,8 @@ public sealed class ConcatenatingMergeStrategyTests
         var content = "#include <a>\ncode\n#include <b>";
         var directive1 = new TestDirective(0..12);
         var directive2 = new TestDirective(18..30);
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>("test.txt", content.AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>("test.txt", content.AsMemory()),
             new[] { directive1, directive2 });
         var context = CreateMergeContext();
 
@@ -132,8 +132,8 @@ public sealed class ConcatenatingMergeStrategyTests
     {
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
         var content = "Pure content without directives";
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>("clean.txt", content.AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>("clean.txt", content.AsMemory()),
             Array.Empty<TestDirective>());
         var context = CreateMergeContext();
 
@@ -148,8 +148,8 @@ public sealed class ConcatenatingMergeStrategyTests
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
         var content = "#pragma once\nActual content";
         var directive = new TestDirective(0..13);
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>("header.h", content.AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>("header.h", content.AsMemory()),
             new[] { directive });
         var context = CreateMergeContext();
 
@@ -165,8 +165,8 @@ public sealed class ConcatenatingMergeStrategyTests
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
         var content = "Content\n#endif";
         var directive = new TestDirective(8..14);
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>("guarded.h", content.AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>("guarded.h", content.AsMemory()),
             new[] { directive });
         var context = CreateMergeContext();
 
@@ -198,8 +198,8 @@ public sealed class ConcatenatingMergeStrategyTests
     {
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
         ResourceId resourceId = "source.txt";
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>(resourceId, "content".AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>(resourceId, "content".AsMemory()),
             Array.Empty<TestDirective>());
         var context = CreateMergeContext([resource]);
 
@@ -215,10 +215,10 @@ public sealed class ConcatenatingMergeStrategyTests
     public void Merge_MultipleFiles_MappingsTrackOrigin()
     {
         var strategy = new ConcatenatingMergeStrategy<TestDirective, object>();
-        var resources = new List<ResolvedResource<char, TestDirective>>
+        var resources = new List<ResolvedResource<ReadOnlyMemory<char>, TestDirective>>
         {
-            new(new Resource<char>("file1.txt", "Content 1".AsMemory()), Array.Empty<TestDirective>()),
-            new(new Resource<char>("file2.txt", "Content 2".AsMemory()), Array.Empty<TestDirective>())
+            new(new Resource<ReadOnlyMemory<char>>("file1.txt", "Content 1".AsMemory()), Array.Empty<TestDirective>()),
+            new(new Resource<ReadOnlyMemory<char>>("file2.txt", "Content 2".AsMemory()), Array.Empty<TestDirective>())
         };
         var context = CreateMergeContext(resources);
 
@@ -242,8 +242,8 @@ public sealed class ConcatenatingMergeStrategyTests
         // Line 1: keep this
         var content = "#include\nkeep this";
         var directive = new TestDirective(0..9);
-        var resource = new ResolvedResource<char, TestDirective>(
-            new Resource<char>("test.txt", content.AsMemory()),
+        var resource = new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+            new Resource<ReadOnlyMemory<char>>("test.txt", content.AsMemory()),
             new[] { directive });
         var context = CreateMergeContext([resource]);
 
@@ -291,27 +291,28 @@ public sealed class ConcatenatingMergeStrategyTests
 
     #region Test Helpers
 
-    private static List<ResolvedResource<char, TestDirective>> CreateResolvedResources(
+    private static List<ResolvedResource<ReadOnlyMemory<char>, TestDirective>> CreateResolvedResources(
         params (string Path, string Content)[] items)
     {
         return items
-            .Select(item => new ResolvedResource<char, TestDirective>(
-                new Resource<char>(item.Path, item.Content.AsMemory()),
+            .Select(item => new ResolvedResource<ReadOnlyMemory<char>, TestDirective>(
+                new Resource<ReadOnlyMemory<char>>(item.Path, item.Content.AsMemory()),
                 Array.Empty<TestDirective>()))
             .ToList();
     }
 
-    private static MergeContext<char, TestDirective> CreateMergeContext(IReadOnlyList<ResolvedResource<char, TestDirective>>? resources = null)
+    private static MergeContext<ReadOnlyMemory<char>, TestDirective> CreateMergeContext(IReadOnlyList<ResolvedResource<ReadOnlyMemory<char>, TestDirective>>? resources = null)
     {
         var resolvedCache = resources is null
-            ? new Dictionary<ResourceId, IResource<char>>()
+            ? new Dictionary<ResourceId, IResource<ReadOnlyMemory<char>>>()
             : resources.ToDictionary(r => r.Id, r => r.Resource);
 
-        return new MergeContext<char, TestDirective>(
+        return new MergeContext<ReadOnlyMemory<char>, TestDirective>(
             new SourceMapBuilder(),
             new DiagnosticCollection(),
             resolvedCache,
-            new TestDirectiveModel());
+            new TestDirectiveModel(),
+            new ReadOnlyMemoryCharContentModel());
     }
 
     private sealed record TestDirective(Range Location);

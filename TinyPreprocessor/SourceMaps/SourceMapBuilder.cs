@@ -18,7 +18,7 @@ public sealed class SourceMapBuilder
     /// <param name="resource">The original resource identifier.</param>
     /// <param name="generatedStartOffset">The inclusive start offset in generated output.</param>
     /// <param name="originalStartOffset">The inclusive start offset in original resource.</param>
-    /// <param name="length">The length of the mapped segment (in characters).</param>
+    /// <param name="length">The length of the mapped segment (in content units).</param>
     public void AddOffsetSegment(ResourceId resource, int generatedStartOffset, int originalStartOffset, int length)
     {
         if (generatedStartOffset < 0)

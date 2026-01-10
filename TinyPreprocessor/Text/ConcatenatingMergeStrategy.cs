@@ -11,7 +11,7 @@ namespace TinyPreprocessor.Text;
 /// </summary>
 /// <typeparam name="TDirective">The directive type associated with resources.</typeparam>
 /// <typeparam name="TContext">User-defined context type (unused by this strategy).</typeparam>
-public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStrategy<char, TDirective, TContext>
+public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStrategy<ReadOnlyMemory<char>, TDirective, TContext>
 {
     private readonly ConcatenatingMergeOptions _options;
 
@@ -34,9 +34,9 @@ public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStr
 
     /// <inheritdoc />
     public ReadOnlyMemory<char> Merge(
-        IReadOnlyList<ResolvedResource<char, TDirective>> orderedResources,
+        IReadOnlyList<ResolvedResource<ReadOnlyMemory<char>, TDirective>> orderedResources,
         TContext userContext,
-        MergeContext<char, TDirective> context)
+        MergeContext<ReadOnlyMemory<char>, TDirective> context)
     {
         ArgumentNullException.ThrowIfNull(orderedResources);
         ArgumentNullException.ThrowIfNull(context);
@@ -71,9 +71,9 @@ public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStr
     }
 
     private static void StripDirectivesAndEmitSegments(
-        ResolvedResource<char, TDirective> resource,
+        ResolvedResource<ReadOnlyMemory<char>, TDirective> resource,
         ArrayBufferWriter<char> output,
-        MergeContext<char, TDirective> context)
+        MergeContext<ReadOnlyMemory<char>, TDirective> context)
     {
         var content = resource.Content.Span;
         if (content.Length == 0)
@@ -126,9 +126,9 @@ public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStr
     }
 
     private static List<(int Start, int End)> BuildExcludedRanges(
-        ResolvedResource<char, TDirective> resource,
+        ResolvedResource<ReadOnlyMemory<char>, TDirective> resource,
         ReadOnlySpan<char> content,
-        MergeContext<char, TDirective> context)
+        MergeContext<ReadOnlyMemory<char>, TDirective> context)
     {
         var ranges = new List<(int Start, int End)>(capacity: resource.Directives.Count);
 
