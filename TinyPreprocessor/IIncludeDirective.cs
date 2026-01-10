@@ -1,6 +1,6 @@
 using TinyPreprocessor.Core;
 
-namespace TinyPreprocessor;
+namespace TinyPreprocessor.Text;
 
 /// <summary>
 /// Marker interface for directives that represent resource includes.

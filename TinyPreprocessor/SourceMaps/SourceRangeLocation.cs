@@ -6,13 +6,13 @@ namespace TinyPreprocessor.SourceMaps;
 /// Represents an exact mapping between a generated range and an original range.
 /// </summary>
 /// <param name="Resource">The identifier of the original resource.</param>
-/// <param name="OriginalStart">Inclusive start position in the original resource.</param>
-/// <param name="OriginalEnd">Exclusive end position in the original resource.</param>
-/// <param name="GeneratedStart">Inclusive start position in the generated output.</param>
-/// <param name="GeneratedEnd">Exclusive end position in the generated output.</param>
+/// <param name="OriginalStartOffset">Inclusive start offset in the original resource.</param>
+/// <param name="OriginalEndOffset">Exclusive end offset in the original resource.</param>
+/// <param name="GeneratedStartOffset">Inclusive start offset in the generated output.</param>
+/// <param name="GeneratedEndOffset">Exclusive end offset in the generated output.</param>
 public sealed record SourceRangeLocation(
     ResourceId Resource,
-    SourcePosition OriginalStart,
-    SourcePosition OriginalEnd,
-    SourcePosition GeneratedStart,
-    SourcePosition GeneratedEnd);
+    int OriginalStartOffset,
+    int OriginalEndOffset,
+    int GeneratedStartOffset,
+    int GeneratedEndOffset);

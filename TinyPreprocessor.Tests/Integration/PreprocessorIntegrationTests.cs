@@ -1,8 +1,8 @@
 using Moq;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.Diagnostics;
-using TinyPreprocessor.Merging;
 using TinyPreprocessor.SourceMaps;
+using TinyPreprocessor.Text;
 using Xunit;
 
 namespace TinyPreprocessor.Tests.Integration;
@@ -18,7 +18,7 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_SingleFileNoIncludes_ReturnsContent()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource("main.txt", "Hello, World!".AsMemory());
+        var root = new Resource<char>("main.txt", "Hello, World!".AsMemory());
 
         var result = await preprocessor.ProcessAsync(root, new object());
 
@@ -30,11 +30,11 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_WithSimpleInclude_MergesCorrectly()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var header = new Resource("header.txt", "Header content".AsMemory());
-        var main = new Resource("main.txt", "#include header.txt\nMain content".AsMemory());
+        var header = new Resource<char>("header.txt", "Header content".AsMemory());
+        var main = new Resource<char>("main.txt", "#include header.txt\nMain content".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(header, null));
+        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(header, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -47,36 +47,38 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_WithSimpleInclude_ProducesExactFlattenedOutputAndSourceMap()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var header = new Resource("header.txt", "H1\nH2".AsMemory());
-        var main = new Resource("main.txt", "#include header.txt\nM1".AsMemory());
+        const string headerText = "H1\nH2";
+        var header = new Resource<char>("header.txt", headerText.AsMemory());
+        var main = new Resource<char>("main.txt", "#include header.txt\nM1".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(header, null));
+        resolver.Setup(r => r.ResolveAsync("header.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(header, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
         Assert.True(result.Success);
-        Assert.Equal("H1\nH2\n\nM1", result.Content.ToString());
+        var content = result.Content.ToString();
+        Assert.Equal("H1\nH2\n\nM1", content);
 
-        AssertMapped(result.SourceMap, generatedLine: 0, generatedColumn: 0, expectedResource: "header.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
-        AssertMapped(result.SourceMap, generatedLine: 1, generatedColumn: 1, expectedResource: "header.txt", expectedOriginalLine: 1, expectedOriginalColumn: 1);
+        AssertMapped(result.SourceMap, content, generatedLine: 0, generatedColumn: 0, expectedResource: "header.txt", expectedOriginalOffset: 0);
+        AssertMapped(result.SourceMap, content, generatedLine: 1, generatedColumn: 1, expectedResource: "header.txt", expectedOriginalOffset: OffsetOfLineColumn(headerText, line: 1, column: 1));
         // This blank line is formed by the original newline after the include directive.
-        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: "#include header.txt".Length);
-        AssertMapped(result.SourceMap, generatedLine: 3, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, content, generatedLine: 2, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalOffset: "#include header.txt".Length);
+        AssertMapped(result.SourceMap, content, generatedLine: 3, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalOffset: "#include header.txt\n".Length);
     }
 
     [Fact]
     public async Task ProcessAsync_MultiLevelIncludes_ProcessesAll()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var level2 = new Resource("level2.txt", "Level 2".AsMemory());
-        var level1 = new Resource("level1.txt", "#include level2.txt\nLevel 1".AsMemory());
-        var main = new Resource("main.txt", "#include level1.txt\nMain".AsMemory());
+        var level2 = new Resource<char>("level2.txt", "Level 2".AsMemory());
+        var level1 = new Resource<char>("level1.txt", "#include level2.txt\nLevel 1".AsMemory());
+        var main = new Resource<char>("main.txt", "#include level1.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -90,28 +92,33 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_MultiLevelIncludes_FlattensAndMapsNestedIncludesCorrectly()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var level2 = new Resource("level2.txt", "L2a\nL2b".AsMemory());
-        var level1 = new Resource("level1.txt", "#include level2.txt\nL1".AsMemory());
-        var main = new Resource("main.txt", "#include level1.txt\nM".AsMemory());
+        const string level2Text = "L2a\nL2b";
+        const string level1Text = "#include level2.txt\nL1";
+        const string mainText = "#include level1.txt\nM";
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level2, null));
+        var level2 = new Resource<char>("level2.txt", level2Text.AsMemory());
+        var level1 = new Resource<char>("level1.txt", level1Text.AsMemory());
+        var main = new Resource<char>("main.txt", mainText.AsMemory());
+
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
         Assert.True(result.Success);
-        Assert.Equal("L2a\nL2b\n\nL1\n\nM", result.Content.ToString());
+        var content = result.Content.ToString();
+        Assert.Equal("L2a\nL2b\n\nL1\n\nM", content);
 
-        AssertMapped(result.SourceMap, generatedLine: 0, generatedColumn: 1, expectedResource: "level2.txt", expectedOriginalLine: 0, expectedOriginalColumn: 1);
-        AssertMapped(result.SourceMap, generatedLine: 1, generatedColumn: 0, expectedResource: "level2.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, content, generatedLine: 0, generatedColumn: 1, expectedResource: "level2.txt", expectedOriginalOffset: OffsetOfLineColumn(level2Text, line: 0, column: 1));
+        AssertMapped(result.SourceMap, content, generatedLine: 1, generatedColumn: 0, expectedResource: "level2.txt", expectedOriginalOffset: OffsetOfLineColumn(level2Text, line: 1, column: 0));
         // Blank line after level2 comes from the original newline after the include directive in level1.
-        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 0, expectedOriginalColumn: "#include level2.txt".Length);
-        AssertMapped(result.SourceMap, generatedLine: 3, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, content, generatedLine: 2, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalOffset: "#include level2.txt".Length);
+        AssertMapped(result.SourceMap, content, generatedLine: 3, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalOffset: "#include level2.txt\n".Length);
         // Blank line after level1 comes from the original newline after the include directive in main.
-        AssertMapped(result.SourceMap, generatedLine: 4, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: "#include level1.txt".Length);
-        AssertMapped(result.SourceMap, generatedLine: 5, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
+        AssertMapped(result.SourceMap, content, generatedLine: 4, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalOffset: "#include level1.txt".Length);
+        AssertMapped(result.SourceMap, content, generatedLine: 5, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalOffset: "#include level1.txt\n".Length);
     }
 
     [Fact]
@@ -119,20 +126,20 @@ public sealed class PreprocessorIntegrationTests
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
 
-        var c = new Resource("c.txt", "C1".AsMemory());
-        var a = new Resource("a.txt", "#include c.txt\nA1".AsMemory());
-        var d = new Resource("d.txt", "D1".AsMemory());
-        var b = new Resource("b.txt", "#include d.txt\nB1".AsMemory());
-        var main = new Resource("main.txt", "#include a.txt\n#include b.txt\nM1".AsMemory());
+        var c = new Resource<char>("c.txt", "C1".AsMemory());
+        var a = new Resource<char>("a.txt", "#include c.txt\nA1".AsMemory());
+        var d = new Resource<char>("d.txt", "D1".AsMemory());
+        var b = new Resource<char>("b.txt", "#include d.txt\nB1".AsMemory());
+        var main = new Resource<char>("main.txt", "#include a.txt\n#include b.txt\nM1".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(a, null));
-        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(b, null));
-        resolver.Setup(r => r.ResolveAsync("c.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(c, null));
-        resolver.Setup(r => r.ResolveAsync("d.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(d, null));
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(a, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(b, null));
+        resolver.Setup(r => r.ResolveAsync("c.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(c, null));
+        resolver.Setup(r => r.ResolveAsync("d.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(d, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -152,33 +159,33 @@ public sealed class PreprocessorIntegrationTests
         Assert.True(content.IndexOf("D1", StringComparison.Ordinal) < content.IndexOf("B1", StringComparison.Ordinal));
 
         // Validate source mapping for each unique token without assuming a/b branch ordering.
-        AssertMappedAtToken(result.SourceMap, content, token: "C1", expectedResource: "c.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
-        AssertMappedAtToken(result.SourceMap, content, token: "A1", expectedResource: "a.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
-        AssertMappedAtToken(result.SourceMap, content, token: "D1", expectedResource: "d.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
-        AssertMappedAtToken(result.SourceMap, content, token: "B1", expectedResource: "b.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
-        AssertMappedAtToken(result.SourceMap, content, token: "M1", expectedResource: "main.txt", expectedOriginalLine: 2, expectedOriginalColumn: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "C1", expectedResource: "c.txt", expectedOriginalOffset: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "A1", expectedResource: "a.txt", expectedOriginalOffset: "#include c.txt\n".Length);
+        AssertMappedAtToken(result.SourceMap, content, token: "D1", expectedResource: "d.txt", expectedOriginalOffset: 0);
+        AssertMappedAtToken(result.SourceMap, content, token: "B1", expectedResource: "b.txt", expectedOriginalOffset: "#include d.txt\n".Length);
+        AssertMappedAtToken(result.SourceMap, content, token: "M1", expectedResource: "main.txt", expectedOriginalOffset: "#include a.txt\n#include b.txt\n".Length);
     }
 
     [Fact]
     public async Task ProcessAsync_BuildsSourceMap()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource("source.txt", "Line 1\nLine 2".AsMemory());
+        var root = new Resource<char>("source.txt", "Line 1\nLine 2".AsMemory());
 
         var result = await preprocessor.ProcessAsync(root, new object());
 
         Assert.NotNull(result.SourceMap);
-        Assert.NotNull(result.SourceMap.Query(new SourcePosition(0, 0)));
+        Assert.NotNull(result.SourceMap.Query(generatedOffset: 0));
     }
 
     [Fact]
     public async Task ProcessAsync_PopulatesDiagnostics()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource("main.txt", "#include missing.txt\nContent".AsMemory());
+        var root = new Resource<char>("main.txt", "#include missing.txt\nContent".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("missing.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(null, 
+        resolver.Setup(r => r.ResolveAsync("missing.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(null, 
                 new ResolutionFailedDiagnostic("missing.txt", "File not found")));
 
         var result = await preprocessor.ProcessAsync(root, new object());
@@ -191,11 +198,11 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_TracksProcessedResources()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var dep = new Resource("dep.txt", "Dependency".AsMemory());
-        var main = new Resource("main.txt", "#include dep.txt\nMain".AsMemory());
+        var dep = new Resource<char>("dep.txt", "Dependency".AsMemory());
+        var main = new Resource<char>("main.txt", "#include dep.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("dep.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(dep, null));
+        resolver.Setup(r => r.ResolveAsync("dep.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(dep, null));
 
         var result = await preprocessor.ProcessAsync(main, new object());
 
@@ -212,13 +219,13 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_CircularDependency_ReportsDiagnostic()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var fileA = new Resource("a.txt", "#include b.txt\nFile A".AsMemory());
-        var fileB = new Resource("b.txt", "#include a.txt\nFile B".AsMemory());
+        var fileA = new Resource<char>("a.txt", "#include b.txt\nFile A".AsMemory());
+        var fileB = new Resource<char>("b.txt", "#include a.txt\nFile B".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(fileB, null));
-        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(fileA, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(fileB, null));
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(fileA, null));
 
         var result = await preprocessor.ProcessAsync(fileA, new object());
 
@@ -235,10 +242,10 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_SelfReference_ReportsDiagnostic()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var file = new Resource("self.txt", "#include self.txt\nContent".AsMemory());
+        var file = new Resource<char>("self.txt", "#include self.txt\nContent".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("self.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(file, null));
+        resolver.Setup(r => r.ResolveAsync("self.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(file, null));
 
         var result = await preprocessor.ProcessAsync(file, new object());
 
@@ -253,13 +260,13 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_CircularDependency_ContinuesProcessing()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var fileA = new Resource("a.txt", "#include b.txt\nContent A".AsMemory());
-        var fileB = new Resource("b.txt", "#include a.txt\nContent B".AsMemory());
+        var fileA = new Resource<char>("a.txt", "#include b.txt\nContent A".AsMemory());
+        var fileB = new Resource<char>("b.txt", "#include a.txt\nContent B".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(fileB, null));
-        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(fileA, null));
+        resolver.Setup(r => r.ResolveAsync("b.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(fileB, null));
+        resolver.Setup(r => r.ResolveAsync("a.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(fileA, null));
 
         var result = await preprocessor.ProcessAsync(fileA, new object());
 
@@ -275,17 +282,17 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_DeduplicationEnabled_IncludesOnlyOnce()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var shared = new Resource("shared.txt", "SHARED".AsMemory());
-        var libA = new Resource("libA.txt", "#include shared.txt\nLibA".AsMemory());
-        var libB = new Resource("libB.txt", "#include shared.txt\nLibB".AsMemory());
-        var main = new Resource("main.txt", "#include libA.txt\n#include libB.txt\nMain".AsMemory());
+        var shared = new Resource<char>("shared.txt", "SHARED".AsMemory());
+        var libA = new Resource<char>("libA.txt", "#include shared.txt\nLibA".AsMemory());
+        var libB = new Resource<char>("libB.txt", "#include shared.txt\nLibB".AsMemory());
+        var main = new Resource<char>("main.txt", "#include libA.txt\n#include libB.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(shared, null));
-        resolver.Setup(r => r.ResolveAsync("libA.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(libA, null));
-        resolver.Setup(r => r.ResolveAsync("libB.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(libB, null));
+        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(shared, null));
+        resolver.Setup(r => r.ResolveAsync("libA.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(libA, null));
+        resolver.Setup(r => r.ResolveAsync("libB.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(libB, null));
 
         var options = new PreprocessorOptions(DeduplicateIncludes: true);
         var result = await preprocessor.ProcessAsync(main, new object(), options);
@@ -302,11 +309,11 @@ public sealed class PreprocessorIntegrationTests
         // When deduplication is disabled, we still only include content once,
         // but we do revisit resources for dependency tracking purposes
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var shared = new Resource("shared.txt", "SHARED".AsMemory());
-        var main = new Resource("main.txt", "#include shared.txt\n#include shared.txt\nMain".AsMemory());
+        var shared = new Resource<char>("shared.txt", "SHARED".AsMemory());
+        var main = new Resource<char>("main.txt", "#include shared.txt\n#include shared.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(shared, null));
+        resolver.Setup(r => r.ResolveAsync("shared.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(shared, null));
 
         var options = new PreprocessorOptions(DeduplicateIncludes: false);
         var result = await preprocessor.ProcessAsync(main, new object(), options);
@@ -331,20 +338,20 @@ public sealed class PreprocessorIntegrationTests
         var (preprocessor, resolver, _) = CreatePreprocessor();
 
         // Create a chain of includes that exceeds depth 3
-        var level3 = new Resource("level3.txt", "#include level4.txt\nL3".AsMemory());
-        var level2 = new Resource("level2.txt", "#include level3.txt\nL2".AsMemory());
-        var level1 = new Resource("level1.txt", "#include level2.txt\nL1".AsMemory());
-        var level0 = new Resource("level0.txt", "#include level1.txt\nL0".AsMemory());
-        var level4 = new Resource("level4.txt", "L4".AsMemory());
+        var level3 = new Resource<char>("level3.txt", "#include level4.txt\nL3".AsMemory());
+        var level2 = new Resource<char>("level2.txt", "#include level3.txt\nL2".AsMemory());
+        var level1 = new Resource<char>("level1.txt", "#include level2.txt\nL1".AsMemory());
+        var level0 = new Resource<char>("level0.txt", "#include level1.txt\nL0".AsMemory());
+        var level4 = new Resource<char>("level4.txt", "L4".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level2, null));
-        resolver.Setup(r => r.ResolveAsync("level3.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level3, null));
-        resolver.Setup(r => r.ResolveAsync("level4.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level4, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level3.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level3, null));
+        resolver.Setup(r => r.ResolveAsync("level4.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level4, null));
 
         var options = new PreprocessorOptions(MaxIncludeDepth: 3);
         var result = await preprocessor.ProcessAsync(level0, new object(), options);
@@ -361,14 +368,14 @@ public sealed class PreprocessorIntegrationTests
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
 
-        var level2 = new Resource("level2.txt", "L2".AsMemory());
-        var level1 = new Resource("level1.txt", "#include level2.txt\nL1".AsMemory());
-        var level0 = new Resource("level0.txt", "#include level1.txt\nL0".AsMemory());
+        var level2 = new Resource<char>("level2.txt", "L2".AsMemory());
+        var level1 = new Resource<char>("level1.txt", "#include level2.txt\nL1".AsMemory());
+        var level0 = new Resource<char>("level0.txt", "#include level1.txt\nL0".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level1, null));
-        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(level2, null));
+        resolver.Setup(r => r.ResolveAsync("level1.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level1, null));
+        resolver.Setup(r => r.ResolveAsync("level2.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(level2, null));
 
         var options = new PreprocessorOptions(MaxIncludeDepth: 5);
         var result = await preprocessor.ProcessAsync(level0, new object(), options);
@@ -384,11 +391,11 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_MaxDepthZero_FailsOnFirstInclude()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var child = new Resource("child.txt", "Child".AsMemory());
-        var main = new Resource("main.txt", "#include child.txt\nMain".AsMemory());
+        var child = new Resource<char>("child.txt", "Child".AsMemory());
+        var main = new Resource<char>("main.txt", "#include child.txt\nMain".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("child.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResourceResolutionResult(child, null));
+        resolver.Setup(r => r.ResolveAsync("child.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<char>(child, null));
 
         var options = new PreprocessorOptions(MaxIncludeDepth: 0);
         var result = await preprocessor.ProcessAsync(main, new object(), options);
@@ -408,13 +415,13 @@ public sealed class PreprocessorIntegrationTests
     public async Task ProcessAsync_Cancelled_ThrowsOperationCancelledException()
     {
         var (preprocessor, resolver, _) = CreatePreprocessor();
-        var root = new Resource("main.txt", "#include slow.txt\nContent".AsMemory());
+        var root = new Resource<char>("main.txt", "#include slow.txt\nContent".AsMemory());
 
-        resolver.Setup(r => r.ResolveAsync("slow.txt", It.IsAny<IResource?>(), It.IsAny<CancellationToken>()))
-            .Returns(async (string _, IResource? _, CancellationToken ct) =>
+        resolver.Setup(r => r.ResolveAsync("slow.txt", It.IsAny<IResource<char>?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, IResource<char>? _, CancellationToken ct) =>
             {
                 await Task.Delay(1000, ct);
-                return new ResourceResolutionResult(new Resource("slow.txt", "".AsMemory()), null);
+                return new ResourceResolutionResult<char>(new Resource<char>("slow.txt", "".AsMemory()), null);
             });
 
         using var cts = new CancellationTokenSource();
@@ -442,14 +449,14 @@ public sealed class PreprocessorIntegrationTests
     #region Test Infrastructure
 
     private static (
-        Preprocessor<TestIncludeDirective, object> Preprocessor,
-        Mock<IResourceResolver> Resolver,
-        Mock<IDirectiveParser<TestIncludeDirective>> Parser)
+        Preprocessor<char, TestIncludeDirective, object> Preprocessor,
+        Mock<IResourceResolver<char>> Resolver,
+        Mock<IDirectiveParser<char, TestIncludeDirective>> Parser)
         CreatePreprocessor()
     {
-        var parser = new Mock<IDirectiveParser<TestIncludeDirective>>();
-        var resolver = new Mock<IResourceResolver>();
-        var mergeStrategy = new ConcatenatingMergeStrategy<object>();
+        var parser = new Mock<IDirectiveParser<char, TestIncludeDirective>>();
+        var resolver = new Mock<IResourceResolver<char>>();
+        var mergeStrategy = new ConcatenatingMergeStrategy<TestIncludeDirective, object>();
 
         // Setup parser to find #include directives
         parser.Setup(p => p.Parse(It.IsAny<ReadOnlyMemory<char>>(), It.IsAny<ResourceId>()))
@@ -473,8 +480,9 @@ public sealed class PreprocessorIntegrationTests
                 return directives;
             });
 
-        var preprocessor = new Preprocessor<TestIncludeDirective, object>(
+        var preprocessor = new Preprocessor<char, TestIncludeDirective, object>(
             parser.Object,
+            new TestIncludeDirectiveModel(),
             resolver.Object,
             mergeStrategy);
 
@@ -495,18 +503,18 @@ public sealed class PreprocessorIntegrationTests
 
     private static void AssertMapped(
         SourceMap sourceMap,
+        string generatedContent,
         int generatedLine,
         int generatedColumn,
         string expectedResource,
-        int expectedOriginalLine,
-        int expectedOriginalColumn)
+        int expectedOriginalOffset)
     {
-        var mapped = sourceMap.Query(new SourcePosition(generatedLine, generatedColumn));
+        var generatedOffset = OffsetOfLineColumn(generatedContent, generatedLine, generatedColumn);
+        var mapped = sourceMap.Query(generatedOffset);
 
         Assert.NotNull(mapped);
         Assert.Equal(new ResourceId(expectedResource), mapped.Resource);
-        Assert.Equal(expectedOriginalLine, mapped.OriginalPosition.Line);
-        Assert.Equal(expectedOriginalColumn, mapped.OriginalPosition.Column);
+        Assert.Equal(expectedOriginalOffset, mapped.OriginalOffset);
     }
 
     private static void AssertMappedAtToken(
@@ -514,36 +522,59 @@ public sealed class PreprocessorIntegrationTests
         string generatedContent,
         string token,
         string expectedResource,
-        int expectedOriginalLine,
-        int expectedOriginalColumn)
+        int expectedOriginalOffset)
     {
-        var position = FindPosition(generatedContent, token);
-        var mapped = sourceMap.Query(position);
+        var generatedOffset = FindOffset(generatedContent, token);
+        var mapped = sourceMap.Query(generatedOffset);
 
         Assert.NotNull(mapped);
         Assert.Equal(new ResourceId(expectedResource), mapped.Resource);
-        Assert.Equal(expectedOriginalLine, mapped.OriginalPosition.Line);
-        Assert.Equal(expectedOriginalColumn, mapped.OriginalPosition.Column);
+        Assert.Equal(expectedOriginalOffset, mapped.OriginalOffset);
     }
 
-    private static SourcePosition FindPosition(string text, string token)
+    private static int FindOffset(string text, string token)
     {
         var index = text.IndexOf(token, StringComparison.Ordinal);
         Assert.True(index >= 0, $"Token '{token}' not found in generated output.");
 
-        var line = 0;
-        var lastNewLineIndex = -1;
-        for (var i = 0; i < index; i++)
+        return index;
+    }
+
+    private static int OffsetOfLineColumn(string text, int line, int column)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(line);
+        ArgumentOutOfRangeException.ThrowIfNegative(column);
+
+        var offset = 0;
+        var currentLine = 0;
+        var currentColumn = 0;
+
+        for (var i = 0; i < text.Length; i++)
         {
+            if (currentLine == line && currentColumn == column)
+            {
+                return offset;
+            }
+
             if (text[i] == '\n')
             {
-                line++;
-                lastNewLineIndex = i;
+                currentLine++;
+                currentColumn = 0;
             }
+            else
+            {
+                currentColumn++;
+            }
+
+            offset++;
         }
 
-        var column = index - (lastNewLineIndex + 1);
-        return new SourcePosition(line, column);
+        if (currentLine == line && currentColumn == column)
+        {
+            return offset;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(line), "Line/column is outside the provided text.");
     }
 
     #endregion
@@ -552,4 +583,15 @@ public sealed class PreprocessorIntegrationTests
 /// <summary>
 /// Test implementation of IIncludeDirective for integration tests.
 /// </summary>
-public sealed record TestIncludeDirective(string Reference, System.Range Location) : IIncludeDirective;
+public sealed record TestIncludeDirective(string Reference, System.Range Location);
+
+file sealed class TestIncludeDirectiveModel : IDirectiveModel<TestIncludeDirective>
+{
+    public System.Range GetLocation(TestIncludeDirective directive) => directive.Location;
+
+    public bool TryGetReference(TestIncludeDirective directive, out string reference)
+    {
+        reference = directive.Reference;
+        return true;
+    }
+}

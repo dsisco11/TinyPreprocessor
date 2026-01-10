@@ -7,9 +7,9 @@ namespace TinyPreprocessor.Merging;
 /// </summary>
 /// <param name="Resource">The resolved resource.</param>
 /// <param name="Directives">The parsed directives found in the resource.</param>
-public sealed record ResolvedResource(
-    IResource Resource,
-    IReadOnlyList<IDirective> Directives)
+public sealed record ResolvedResource<TSymbol, TDirective>(
+    IResource<TSymbol> Resource,
+    IReadOnlyList<TDirective> Directives)
 {
     /// <summary>
     /// Gets the resource identifier.
@@ -19,5 +19,5 @@ public sealed record ResolvedResource(
     /// <summary>
     /// Gets the resource content.
     /// </summary>
-    public ReadOnlyMemory<char> Content => Resource.Content;
+    public ReadOnlyMemory<TSymbol> Content => Resource.Content;
 }

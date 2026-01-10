@@ -1,3 +1,4 @@
+#if false
 using TinyPreprocessor.Core;
 using TinyPreprocessor.SourceMaps;
 using Xunit;
@@ -223,3 +224,10 @@ public sealed class SourcePositionTests
 
     #endregion
 }
+
+#endif
+
+namespace TinyPreprocessor.Tests.SourceMaps;
+
+// NOTE: The legacy SourcePosition (line/column) API has been removed.
+// Source maps are now offset-only.
