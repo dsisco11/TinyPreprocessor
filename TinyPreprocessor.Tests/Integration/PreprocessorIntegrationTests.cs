@@ -60,7 +60,8 @@ public sealed class PreprocessorIntegrationTests
 
         AssertMapped(result.SourceMap, generatedLine: 0, generatedColumn: 0, expectedResource: "header.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
         AssertMapped(result.SourceMap, generatedLine: 1, generatedColumn: 1, expectedResource: "header.txt", expectedOriginalLine: 1, expectedOriginalColumn: 1);
-        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        // This blank line is formed by the original newline after the include directive.
+        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: "#include header.txt".Length);
         AssertMapped(result.SourceMap, generatedLine: 3, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
     }
 
@@ -105,9 +106,11 @@ public sealed class PreprocessorIntegrationTests
 
         AssertMapped(result.SourceMap, generatedLine: 0, generatedColumn: 1, expectedResource: "level2.txt", expectedOriginalLine: 0, expectedOriginalColumn: 1);
         AssertMapped(result.SourceMap, generatedLine: 1, generatedColumn: 0, expectedResource: "level2.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
-        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        // Blank line after level2 comes from the original newline after the include directive in level1.
+        AssertMapped(result.SourceMap, generatedLine: 2, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 0, expectedOriginalColumn: "#include level2.txt".Length);
         AssertMapped(result.SourceMap, generatedLine: 3, generatedColumn: 0, expectedResource: "level1.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
-        AssertMapped(result.SourceMap, generatedLine: 4, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: 0);
+        // Blank line after level1 comes from the original newline after the include directive in main.
+        AssertMapped(result.SourceMap, generatedLine: 4, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 0, expectedOriginalColumn: "#include level1.txt".Length);
         AssertMapped(result.SourceMap, generatedLine: 5, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalLine: 1, expectedOriginalColumn: 0);
     }
 
@@ -165,7 +168,7 @@ public sealed class PreprocessorIntegrationTests
         var result = await preprocessor.ProcessAsync(root, new object());
 
         Assert.NotNull(result.SourceMap);
-        Assert.NotEmpty(result.SourceMap.Mappings);
+        Assert.NotNull(result.SourceMap.Query(new SourcePosition(0, 0)));
     }
 
     [Fact]

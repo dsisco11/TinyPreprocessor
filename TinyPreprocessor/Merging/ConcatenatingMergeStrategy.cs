@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Text;
+using TinyPreprocessor.Diagnostics;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.SourceMaps;
 
@@ -54,44 +56,42 @@ public sealed class ConcatenatingMergeStrategy<TContext> : IMergeStrategy<TConte
             return ReadOnlyMemory<char>.Empty;
         }
 
-        var output = new StringBuilder();
-        var currentOutputLine = 0;
+        var output = new ArrayBufferWriter<char>();
 
         for (var i = 0; i < orderedResources.Count; i++)
         {
             var resource = orderedResources[i];
 
+            // Ensure original resources are registered (when available) so offset-based queries can resolve.
+            // The pipeline already does this in Preprocessor, but merge unit tests may construct a context manually.
+            if (context.ResolvedCache.Count > 0)
+            {
+                context.SourceMapBuilder.SetOriginalResources(context.ResolvedCache);
+            }
+
             // Add resource marker if enabled
             if (_options.IncludeResourceMarkers)
             {
                 var marker = string.Format(_options.MarkerFormat, resource.Id.Path);
-                output.Append(marker);
-                currentOutputLine += CountNewLines(marker);
+                Append(output, marker.AsSpan());
             }
 
-            // Strip directives and get the processed content with line mapping info
-            var (strippedContent, lineMappings) = StripDirectives(resource);
-
-            // Record source mappings
-            RecordSourceMappings(
-                resource.Id,
-                strippedContent,
-                lineMappings,
-                currentOutputLine,
-                context.SourceMapBuilder);
-
-            output.Append(strippedContent);
-            currentOutputLine += CountNewLines(strippedContent);
+            StripDirectivesAndEmitSegments(resource, output, context.Diagnostics, context.SourceMapBuilder);
 
             // Add separator between resources (but not after the last one)
             if (i < orderedResources.Count - 1)
             {
-                output.Append(_options.Separator);
-                currentOutputLine += CountNewLines(_options.Separator);
+                Append(output, _options.Separator.AsSpan());
             }
         }
 
-        return output.ToString().AsMemory();
+        var merged = new string(output.WrittenSpan);
+
+        // Register generated output so offset-based queries can convert SourcePosition -> offset.
+        // The pipeline already does this in Preprocessor, but merge unit tests may construct a context manually.
+        context.SourceMapBuilder.SetGeneratedContent(merged.AsMemory());
+
+        return merged.AsMemory();
     }
 
     /// <summary>
@@ -101,174 +101,183 @@ public sealed class ConcatenatingMergeStrategy<TContext> : IMergeStrategy<TConte
     /// <returns>
     /// A tuple containing the stripped content and a list mapping output line indices to original line indices.
     /// </returns>
-    private static (string Content, List<int> LineMappings) StripDirectives(ResolvedResource resource)
-    {
-        var content = resource.Content;
-        var directives = resource.Directives;
-
-        if (directives.Count == 0)
-        {
-            // No directives, return content as-is with identity line mapping
-            var contentString = content.ToString();
-            var lineCount = CountLines(contentString);
-            var identityMapping = Enumerable.Range(0, lineCount).ToList();
-            return (contentString, identityMapping);
-        }
-
-        // Sort directives by location (start index) in descending order for safe removal
-        var sortedDirectives = directives
-            .OrderBy(d => d.Location.Start.GetOffset(content.Length))
-            .ToList();
-
-        // Build a set of character ranges to exclude
-        var excludedRanges = sortedDirectives
-            .Select(d => (
-                Start: d.Location.Start.GetOffset(content.Length),
-                End: d.Location.End.GetOffset(content.Length)))
-            .ToList();
-
-        // Build the stripped content and track line mappings
-        var output = new StringBuilder();
-        var lineMappings = new List<int>();
-        var span = content.Span;
-
-        var currentOriginalLine = 0;
-        var currentCharIndex = 0;
-        var excludeIndex = 0;
-
-        while (currentCharIndex < span.Length)
-        {
-            // Check if we're entering an excluded range
-            while (excludeIndex < excludedRanges.Count &&
-                   excludedRanges[excludeIndex].End <= currentCharIndex)
-            {
-                excludeIndex++;
-            }
-
-            var inExcludedRange = excludeIndex < excludedRanges.Count &&
-                                  currentCharIndex >= excludedRanges[excludeIndex].Start &&
-                                  currentCharIndex < excludedRanges[excludeIndex].End;
-
-            if (inExcludedRange)
-            {
-                // Skip this character, but track line changes
-                if (span[currentCharIndex] == '\n')
-                {
-                    currentOriginalLine++;
-                }
-                currentCharIndex++;
-            }
-            else
-            {
-                // Record line mapping at start of each output line
-                if (output.Length == 0 || (output.Length > 0 && output[^1] == '\n'))
-                {
-                    lineMappings.Add(currentOriginalLine);
-                }
-
-                output.Append(span[currentCharIndex]);
-
-                if (span[currentCharIndex] == '\n')
-                {
-                    currentOriginalLine++;
-                }
-                currentCharIndex++;
-            }
-        }
-
-        // Handle case where content doesn't end with newline but we have content
-        if (output.Length > 0 && lineMappings.Count == 0)
-        {
-            lineMappings.Add(0);
-        }
-
-        return (output.ToString(), lineMappings);
-    }
-
-    /// <summary>
-    /// Records source mappings for the stripped content.
-    /// </summary>
-    private static void RecordSourceMappings(
-        ResourceId resourceId,
-        string strippedContent,
-        List<int> lineMappings,
-        int outputLineOffset,
+    private static void StripDirectivesAndEmitSegments(
+        ResolvedResource resource,
+        ArrayBufferWriter<char> output,
+        DiagnosticCollection diagnostics,
         SourceMapBuilder builder)
     {
-        if (string.IsNullOrEmpty(strippedContent) || lineMappings.Count == 0)
+        var content = resource.Content.Span;
+        if (content.Length == 0)
         {
             return;
         }
 
-        // Split content into lines and record mappings
-        var lines = strippedContent.Split('\n');
-
-        for (var outputLine = 0; outputLine < lineMappings.Count && outputLine < lines.Length; outputLine++)
+        if (resource.Directives.Count == 0)
         {
-            var originalLine = lineMappings[outputLine];
-            var lineLength = lines[outputLine].Length;
+            var generatedStart = output.WrittenCount;
+            Append(output, content);
+            builder.AddOffsetSegment(resource.Id, generatedStart, originalStartOffset: 0, length: content.Length);
+            return;
+        }
 
-            // Skip empty lines that are just artifacts of splitting
-            if (outputLine == lines.Length - 1 && lineLength == 0 && strippedContent.EndsWith('\n'))
+        var excludedRanges = BuildExcludedRanges(resource, content, diagnostics);
+        if (excludedRanges.Count == 0)
+        {
+            var generatedStart = output.WrittenCount;
+            Append(output, content);
+            builder.AddOffsetSegment(resource.Id, generatedStart, originalStartOffset: 0, length: content.Length);
+            return;
+        }
+
+        var current = 0;
+        foreach (var range in excludedRanges)
+        {
+            if (range.Start > current)
             {
+                var length = range.Start - current;
+                var generatedStart = output.WrittenCount;
+                Append(output, content.Slice(current, length));
+                builder.AddOffsetSegment(resource.Id, generatedStart, originalStartOffset: current, length: length);
+            }
+
+            current = Math.Max(current, range.End);
+            if (current >= content.Length)
+            {
+                break;
+            }
+        }
+
+        if (current < content.Length)
+        {
+            var length = content.Length - current;
+            var generatedStart = output.WrittenCount;
+            Append(output, content.Slice(current, length));
+            builder.AddOffsetSegment(resource.Id, generatedStart, originalStartOffset: current, length: length);
+        }
+    }
+
+    private static List<(int Start, int End)> BuildExcludedRanges(
+        ResolvedResource resource,
+        ReadOnlySpan<char> content,
+        DiagnosticCollection diagnostics)
+    {
+        var ranges = new List<(int Start, int End)>(capacity: resource.Directives.Count);
+
+        foreach (var directive in resource.Directives)
+        {
+            var start = directive.Location.Start.GetOffset(content.Length);
+            var end = directive.Location.End.GetOffset(content.Length);
+
+            start = Math.Clamp(start, 0, content.Length);
+            end = Math.Clamp(end, 0, content.Length);
+
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            // Whole-line validation (diagnostic-only).
+            if (!IsWholeLineDirective(content, start, end))
+            {
+                diagnostics.Add(new NonWholeLineDirectiveDiagnostic(resource.Id, directive.Location));
+            }
+
+            if (end > start)
+            {
+                ranges.Add((start, end));
+            }
+        }
+
+        if (ranges.Count == 0)
+        {
+            return ranges;
+        }
+
+        ranges.Sort(static (a, b) => a.Start.CompareTo(b.Start));
+
+        // Coalesce overlaps/adjacency.
+        var coalesced = new List<(int Start, int End)>(capacity: ranges.Count);
+        var current = ranges[0];
+        for (var i = 1; i < ranges.Count; i++)
+        {
+            var next = ranges[i];
+            if (next.Start <= current.End)
+            {
+                current = (current.Start, Math.Max(current.End, next.End));
                 continue;
             }
 
-            builder.AddLine(
-                resourceId,
-                generatedLine: outputLineOffset + outputLine,
-                originalLine: originalLine,
-                length: lineLength > 0 ? lineLength : int.MaxValue);
+            coalesced.Add(current);
+            current = next;
         }
+
+        coalesced.Add(current);
+        return coalesced;
     }
 
-    /// <summary>
-    /// Counts the number of lines in a string.
-    /// </summary>
-    private static int CountLines(string text)
+    private static bool IsWholeLineDirective(ReadOnlySpan<char> content, int start, int end)
     {
-        if (string.IsNullOrEmpty(text))
+        if ((uint)start > (uint)content.Length || (uint)end > (uint)content.Length)
         {
-            return 0;
+            return false;
         }
 
-        var count = 0;
-        foreach (var c in text)
+        // Find start-of-line.
+        var lineStart = 0;
+        if (start > 0)
         {
-            if (c == '\n')
+            var prevNewline = content.Slice(0, start).LastIndexOf('\n');
+            lineStart = prevNewline >= 0 ? prevNewline + 1 : 0;
+        }
+
+        // Find end-of-line for the line containing 'start'.
+        var lineEnd = content.Length;
+        var nextNewline = content.Slice(start).IndexOf('\n');
+        if (nextNewline >= 0)
+        {
+            lineEnd = start + nextNewline;
+        }
+
+        // Disallow spans that extend beyond the line (except optionally including the newline itself).
+        if (end > lineEnd + 1)
+        {
+            return false;
+        }
+
+        // Only whitespace allowed before directive start.
+        for (var i = lineStart; i < start; i++)
+        {
+            if (!char.IsWhiteSpace(content[i]))
             {
-                count++;
+                return false;
             }
         }
 
-        // If text doesn't end with newline, count the last line
-        if (text.Length > 0 && text[^1] != '\n')
+        // Only whitespace allowed after directive end until end-of-line.
+        if (end <= lineEnd)
         {
-            count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>
-    /// Counts the number of newline characters in a string.
-    /// </summary>
-    private static int CountNewLines(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
-
-        var count = 0;
-        foreach (var c in text)
-        {
-            if (c == '\n')
+            for (var i = end; i < lineEnd; i++)
             {
-                count++;
+                if (!char.IsWhiteSpace(content[i]))
+                {
+                    return false;
+                }
             }
         }
 
-        return count;
+        return true;
+    }
+
+    private static void Append(ArrayBufferWriter<char> writer, ReadOnlySpan<char> value)
+    {
+        if (value.Length == 0)
+        {
+            return;
+        }
+
+        var dest = writer.GetSpan(value.Length);
+        value.CopyTo(dest);
+        writer.Advance(value.Length);
     }
 }

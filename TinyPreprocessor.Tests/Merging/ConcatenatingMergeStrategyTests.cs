@@ -184,12 +184,14 @@ public sealed class ConcatenatingMergeStrategyTests
     {
         var strategy = new ConcatenatingMergeStrategy<object>();
         var resources = CreateResolvedResources(("test.txt", "Line 1\nLine 2"));
-        var context = CreateMergeContext();
+        var context = CreateMergeContext(resources);
 
-        strategy.Merge(resources, new object(), context);
+        var merged = strategy.Merge(resources, new object(), context);
+        context.SourceMapBuilder.SetGeneratedContent(merged);
+        context.SourceMapBuilder.SetOriginalResources(context.ResolvedCache);
         var sourceMap = context.SourceMapBuilder.Build();
 
-        Assert.NotEmpty(sourceMap.Mappings);
+        Assert.NotNull(sourceMap.Query(new SourcePosition(0, 0)));
     }
 
     [Fact]
@@ -200,12 +202,16 @@ public sealed class ConcatenatingMergeStrategyTests
         var resource = new ResolvedResource(
             new Resource(resourceId, "content".AsMemory()),
             Array.Empty<IDirective>());
-        var context = CreateMergeContext();
+        var context = CreateMergeContext([resource]);
 
-        strategy.Merge([resource], new object(), context);
+        var merged = strategy.Merge([resource], new object(), context);
+        context.SourceMapBuilder.SetGeneratedContent(merged);
+        context.SourceMapBuilder.SetOriginalResources(context.ResolvedCache);
         var sourceMap = context.SourceMapBuilder.Build();
 
-        Assert.All(sourceMap.Mappings, m => Assert.Equal(resourceId, m.OriginalResource));
+        var mapped = sourceMap.Query(new SourcePosition(0, 0));
+        Assert.NotNull(mapped);
+        Assert.Equal(resourceId, mapped.Resource);
     }
 
     [Fact]
@@ -217,16 +223,20 @@ public sealed class ConcatenatingMergeStrategyTests
             new(new Resource("file1.txt", "Content 1".AsMemory()), Array.Empty<IDirective>()),
             new(new Resource("file2.txt", "Content 2".AsMemory()), Array.Empty<IDirective>())
         };
-        var context = CreateMergeContext();
+        var context = CreateMergeContext(resources);
 
-        strategy.Merge(resources, new object(), context);
+        var merged = strategy.Merge(resources, new object(), context);
+        context.SourceMapBuilder.SetGeneratedContent(merged);
+        context.SourceMapBuilder.SetOriginalResources(context.ResolvedCache);
         var sourceMap = context.SourceMapBuilder.Build();
 
-        var file1Mappings = sourceMap.GetMappingsForResource("file1.txt").ToList();
-        var file2Mappings = sourceMap.GetMappingsForResource("file2.txt").ToList();
+        var mapped1 = sourceMap.Query(new SourcePosition(0, 0));
+        var mapped2 = sourceMap.Query(new SourcePosition(1, 0));
 
-        Assert.NotEmpty(file1Mappings);
-        Assert.NotEmpty(file2Mappings);
+        Assert.NotNull(mapped1);
+        Assert.NotNull(mapped2);
+        Assert.Equal(new ResourceId("file1.txt"), mapped1.Resource);
+        Assert.Equal(new ResourceId("file2.txt"), mapped2.Resource);
     }
 
     [Fact]
@@ -240,9 +250,11 @@ public sealed class ConcatenatingMergeStrategyTests
         var resource = new ResolvedResource(
             new Resource("test.txt", content.AsMemory()),
             new[] { directive });
-        var context = CreateMergeContext();
+        var context = CreateMergeContext([resource]);
 
-        strategy.Merge([resource], new object(), context);
+        var merged = strategy.Merge([resource], new object(), context);
+        context.SourceMapBuilder.SetGeneratedContent(merged);
+        context.SourceMapBuilder.SetOriginalResources(context.ResolvedCache);
         var sourceMap = context.SourceMapBuilder.Build();
 
         var mapped = sourceMap.Query(new SourcePosition(0, 0));
@@ -296,12 +308,16 @@ public sealed class ConcatenatingMergeStrategyTests
             .ToList();
     }
 
-    private static MergeContext CreateMergeContext()
+    private static MergeContext CreateMergeContext(IReadOnlyList<ResolvedResource>? resources = null)
     {
+        var resolvedCache = resources is null
+            ? new Dictionary<ResourceId, IResource>()
+            : resources.ToDictionary(r => r.Id, r => r.Resource);
+
         return new MergeContext(
             new SourceMapBuilder(),
             new DiagnosticCollection(),
-            new Dictionary<ResourceId, IResource>());
+            resolvedCache);
     }
 
     private sealed record TestDirective(Range Location) : IDirective;
