@@ -28,6 +28,7 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
     private readonly IResourceResolver<TContent> _resolver;
     private readonly IMergeStrategy<TContent, TDirective, TContext> _mergeStrategy;
     private readonly IContentModel<TContent> _contentModel;
+    private readonly IContentBoundaryResolverProvider _contentBoundaryResolverProvider;
 
     public Preprocessor(PreprocessorConfiguration<TContent, TDirective, TContext> config)
     {
@@ -38,6 +39,7 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
         _resolver = config.ResourceResolver;
         _mergeStrategy = config.MergeStrategy;
         _contentModel = config.ContentModel;
+        _contentBoundaryResolverProvider = config.ContentBoundaryResolverProvider;
     }
 
     /// <summary>
@@ -104,7 +106,8 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
             diagnostics,
             resolvedCache,
             _directiveModel,
-            _contentModel);
+            _contentModel,
+            _contentBoundaryResolverProvider);
         var orderedResources = processingOrder
             .Where(id => cache.ContainsKey(id))
             .Select(id => cache[id])

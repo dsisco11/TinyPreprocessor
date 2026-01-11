@@ -189,6 +189,32 @@ foreach (var range in ranges)
     Console.WriteLine(
         $"Generated [{range.GeneratedStartOffset} - {range.GeneratedEndOffset}) -> {range.Resource.Path} [{range.OriginalStartOffset} - {range.OriginalEndOffset})");
 }
+
+// Boundary-based "line number" resolution (content-agnostic)
+//
+// If you want a line number for an offset, provide an IContentBoundaryResolver for a boundary kind
+// (e.g., TinyPreprocessor.Text.LineBoundary), and compose it with the source map.
+//
+// Example (LF-only): boundary offsets are start offsets of lines after the first line.
+public sealed class LfLineBoundaryResolver : IContentBoundaryResolver<ReadOnlyMemory<char>, LineBoundary>
+{
+    public IEnumerable<int> ResolveOffsets(ReadOnlyMemory<char> content, ResourceId resourceId, int startOffset, int endOffset)
+    {
+        var s = content.Span.Slice(startOffset, Math.Min(endOffset, content.Length) - startOffset);
+        for (var o = startOffset, i = s.IndexOf('\n'); i >= 0 && i + 1 < s.Length; s = s.Slice(i + 1), o += i + 1, i = s.IndexOf('\n'))
+            yield return o;
+    }
+}
+
+var boundaryLocation = result.SourceMap.ResolveOriginalBoundaryLocation(
+    generatedOffset: 0,
+    contentProvider: id => files[id].AsMemory(),
+    boundaryResolver: new LfLineBoundaryResolver());
+
+if (boundaryLocation is not null)
+{
+    Console.WriteLine($"Line index: {boundaryLocation.BoundaryIndex}");
+}
 ```
 
 ## Custom Merge Strategy
@@ -224,6 +250,7 @@ public sealed class JsonMergeStrategy : IMergeStrategy<ReadOnlyMemory<char>, Inc
 - [Source Mapping](docs/04-source-mapping.md)
 - [Merge System](docs/05-merge-system.md)
 - [Preprocessor Orchestrator](docs/06-preprocessor-orchestrator.md)
+- [Content Boundaries](docs/07-content-boundaries.md)
 
 ## Architecture
 

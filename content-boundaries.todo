@@ -67,11 +67,11 @@ Phase 3 - SourceMap + Boundary Composition Utilities:
 
 Phase 4 - Adoption in Text-Specific Features (Optional / Follow-up):
   Phase 4.1 - Replace Hard-Coded Newline Semantics:
-    ☐ Update TinyPreprocessor/Text/NonWholeLineDirectiveDiagnostic.cs to use boundary provider/resolver (LineBoundary)
-    ☐ Define expected behavior for CRLF / LF / custom newline sequences via downstream resolver
+    ✔ Update TinyPreprocessor/Text/ConcatenatingMergeStrategy.cs to use boundary provider/resolver (LineBoundary)
+    ✔ Define expected behavior for CRLF / LF / custom newline sequences via downstream resolver
 
   Phase 4.2 - Documentation:
-    ☐ Add docs describing boundary concepts and examples for line boundaries
-    ☐ Update README source-mapping section to mention boundary-based line resolution
+    ✔ Add docs describing boundary concepts and examples for line boundaries
+    ✔ Update README source-mapping section to mention boundary-based line resolution
 
 ```
