@@ -15,12 +15,15 @@ public sealed record class PreprocessorConfiguration<TContent, TDirective, TCont
 
     public IContentModel<TContent> ContentModel { get; }
 
+    public IContentBoundaryResolverProvider ContentBoundaryResolverProvider { get; }
+
     public PreprocessorConfiguration(
         IDirectiveParser<TContent, TDirective> directiveParser,
         IDirectiveModel<TDirective> directiveModel,
         IResourceResolver<TContent> resourceResolver,
         IMergeStrategy<TContent, TDirective, TContext> mergeStrategy,
-        IContentModel<TContent> contentModel)
+        IContentModel<TContent> contentModel,
+        IContentBoundaryResolverProvider? contentBoundaryResolverProvider = null)
     {
         ArgumentNullException.ThrowIfNull(directiveParser);
         ArgumentNullException.ThrowIfNull(directiveModel);
@@ -33,5 +36,6 @@ public sealed record class PreprocessorConfiguration<TContent, TDirective, TCont
         ResourceResolver = resourceResolver;
         MergeStrategy = mergeStrategy;
         ContentModel = contentModel;
+        ContentBoundaryResolverProvider = contentBoundaryResolverProvider ?? Core.ContentBoundaryResolverProvider.Empty;
     }
 }

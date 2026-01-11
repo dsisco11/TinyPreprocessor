@@ -30,23 +30,23 @@ Phase 1 - PreprocessorConfiguration Refactor:
 
 Phase 2 - Content Boundary Abstractions (Core):
   Phase 2.1 - Boundary Resolver Interfaces:
-    ☐ Add TinyPreprocessor/Core/IContentBoundaryResolver.cs
-    ☐ Define `IContentBoundaryResolver<TBoundary>` where TBoundary is a marker type
-    ☐ Core behavior: query boundary offsets in a [startOffset, endOffset) range within a given content instance
-    ☐ Choose range contract details:
-      ☐ 0-based offsets
-      ☐ inclusive/exclusive semantics documented
-      ☐ ordering guaranteed (ascending)
-      ☐ duplicates handled (allowed vs filtered)
+    ✔ Add TinyPreprocessor/Core/IContentBoundaryResolver.cs
+    ✔ Define `IContentBoundaryResolver<TContent, TBoundary>` where TBoundary is a marker type
+    ✔ Core behavior: query boundary offsets in a [startOffset, endOffset) range within a given content instance
+    ✔ Choose range contract details:
+      ✔ 0-based offsets
+      ✔ inclusive/exclusive semantics documented
+      ✔ ordering guaranteed (ascending)
+      ✔ duplicates handled (allowed vs filtered)
 
   Phase 2.2 - Provider for Multiple Boundary Types:
-    ☐ Add TinyPreprocessor/Core/IContentBoundaryResolverProvider.cs
-    ☐ Define `bool TryGet<TBoundary>(out IContentBoundaryResolver<TBoundary> resolver)`
-    ☐ Add an Empty provider implementation (Null Object), e.g. ContentBoundaryResolverProvider.Empty
+    ✔ Add TinyPreprocessor/Core/IContentBoundaryResolverProvider.cs
+    ✔ Define `bool TryGet<TContent, TBoundary>(out IContentBoundaryResolver<TContent, TBoundary> resolver)`
+    ✔ Add an Empty provider implementation (Null Object), e.g. ContentBoundaryResolverProvider.Empty
 
   Phase 2.3 - Wire Provider into Configuration:
-    ☐ Add `IContentBoundaryResolverProvider ContentBoundaryResolverProvider { get; init; }` to PreprocessorConfiguration
-    ☐ Default to empty provider (no null checks required)
+    ✔ Add `IContentBoundaryResolverProvider ContentBoundaryResolverProvider { get; }` to PreprocessorConfiguration
+    ✔ Default to empty provider (no null checks required)
 
 Phase 3 - SourceMap + Boundary Composition Utilities:
   Phase 3.1 - Decide Composition Surface:
