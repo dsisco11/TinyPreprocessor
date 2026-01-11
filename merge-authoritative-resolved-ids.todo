@@ -66,12 +66,11 @@ Deliverable
 ---
 
 Phase 5 — Diagnostics & Documentation
-- Ensure diagnostics remain accurate:
-  - Resolution failures should be reported by resolution diagnostics.
-  - Merge should only report missing resolved trees when the dependency truly wasn’t processed/available.
-- Add/update docs:
-  - Explain that merge strategies should treat `MergeContext.ResolvedReferences` as source of truth.
-  - Document the keying scheme and how to look up a directive’s resolved target id.
+- [x] Ensure diagnostics remain accurate.
+  - Resolution failures are still reported by resolution diagnostics.
+  - Merge strategies should only report merge-time issues (and should never guess ids from raw references).
+- [x] Add/update docs.
+  - Documented `MergeContext.ResolvedReferences` as source of truth, including keying scheme.
 
 Deliverable
 - Clear guidance for downstream merge strategy authors.

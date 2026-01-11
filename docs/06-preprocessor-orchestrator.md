@@ -81,6 +81,7 @@ class Preprocessor<TContent, TDirective, TContext>
         graph ← new ResourceDependencyGraph()
         cache ← new Dictionary<ResourceId, ResolvedResource>()
         sourceMapBuilder ← new SourceMapBuilder()
+        resolvedReferences ← new Dictionary<(ResourceId, directiveIndex), ResourceId>()
 
         // Phase 1: Recursive resolution
         await ResolveRecursiveAsync(root, depth: 0, ...)
@@ -92,7 +93,7 @@ class Preprocessor<TContent, TDirective, TContext>
         processingOrder ← GetProcessingOrder(graph, diagnostics)
 
         // Phase 4: Merge
-        mergeContext ← new MergeContext(sourceMapBuilder, diagnostics, cache, directiveModel, contentModel)
+        mergeContext ← new MergeContext(sourceMapBuilder, diagnostics, cache, resolvedReferences, directiveModel, contentModel)
         orderedResources ← processingOrder.Select(id → cache[id])
         mergedContent ← mergeStrategy.Merge(orderedResources, context, mergeContext)
 
@@ -172,6 +173,15 @@ cache[resource.Id] = ResolvedResource(resource, directives)
 
 For the preprocessor to know which directives represent dependencies, provide an `IDirectiveModel<TDirective>`.
 This model extracts a `string` reference for directives that should trigger recursive resolution.
+
+### Resolved Identity for Merge
+
+Resolvers are allowed to implement arbitrary reference-to-identity mapping (e.g., domain-prefixed ids like
+`domain:shaderincludes/shared.glsl`). Merge strategies must not assume that a dependency id can be derived from the
+raw reference string.
+
+To support this, preprocessing records an authoritative mapping from each directive occurrence to its resolved
+dependency `ResourceId` and passes it into `MergeContext` as `ResolvedReferences`.
 
 ---
 
