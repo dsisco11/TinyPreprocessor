@@ -1,6 +1,7 @@
 using Moq;
 using TinyPreprocessor.Core;
 using TinyPreprocessor.Diagnostics;
+using TinyPreprocessor.Merging;
 using TinyPreprocessor.SourceMaps;
 using TinyPreprocessor.Text;
 using Xunit;
@@ -65,6 +66,78 @@ public sealed class PreprocessorIntegrationTests
         // This blank line is formed by the original newline after the include directive.
         AssertMapped(result.SourceMap, content, generatedLine: 2, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalOffset: "#include header.txt".Length);
         AssertMapped(result.SourceMap, content, generatedLine: 3, generatedColumn: 0, expectedResource: "main.txt", expectedOriginalOffset: "#include header.txt\n".Length);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_CustomMappedImport_UsesResolvedReferencesForInlining()
+    {
+        var parser = new Mock<IDirectiveParser<ReadOnlyMemory<char>, TestImportDirective>>();
+        var resolver = new Mock<IResourceResolver<ReadOnlyMemory<char>>>();
+        var mergeStrategy = new ResolvedReferenceInliningMergeStrategy();
+
+        parser
+            .Setup(p => p.Parse(It.IsAny<ReadOnlyMemory<char>>(), It.IsAny<ResourceId>()))
+            .Returns((ReadOnlyMemory<char> content, ResourceId _) =>
+            {
+                var directives = new List<TestImportDirective>();
+                var text = content.ToString();
+                var lines = text.Split('\n');
+                var offset = 0;
+
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("@import ", StringComparison.Ordinal))
+                    {
+                        var firstQuote = line.IndexOf('"', StringComparison.Ordinal);
+                        var lastQuote = line.LastIndexOf('"');
+                        if (firstQuote >= 0 && lastQuote > firstQuote)
+                        {
+                            var reference = line[(firstQuote + 1)..lastQuote];
+                            directives.Add(new TestImportDirective(reference, offset..(offset + line.Length)));
+                        }
+                    }
+
+                    offset += line.Length + 1; // +1 for newline
+                }
+
+                return directives;
+            });
+
+        var config = new PreprocessorConfiguration<ReadOnlyMemory<char>, TestImportDirective, object>(
+            parser.Object,
+            new TestImportDirectiveModel(),
+            resolver.Object,
+            mergeStrategy,
+            new ReadOnlyMemoryCharContentModel());
+
+        var preprocessor = new Preprocessor<ReadOnlyMemory<char>, TestImportDirective, object>(config);
+
+        var includedId = new ResourceId("domain:shaderincludes/shared.glsl");
+        var included = new Resource<ReadOnlyMemory<char>>(includedId.Path, "/* shared */".AsMemory());
+        var rootId = new ResourceId("domain:shaders/test.fsh");
+        var root = new Resource<ReadOnlyMemory<char>>(rootId.Path, "@import \"shared.glsl\"\nvoid main(){}".AsMemory());
+
+        resolver
+            .Setup(r => r.ResolveAsync("shared.glsl", It.IsAny<IResource<ReadOnlyMemory<char>>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResourceResolutionResult<ReadOnlyMemory<char>>(included, null));
+
+        var result = await preprocessor.ProcessAsync(root, new object());
+
+        Assert.True(result.Success);
+
+        var content = result.Content.ToString();
+        Assert.Contains("/* shared */", content);
+        Assert.Contains("void main(){}", content);
+        Assert.DoesNotContain("@import", content);
+
+        var deps = result.DependencyGraph.GetDependencies(rootId);
+        Assert.Contains(includedId, deps);
+
+        Assert.Contains(rootId, result.ProcessedResources);
+        Assert.Contains(includedId, result.ProcessedResources);
+
+        var processed = result.ProcessedResources.ToList();
+        Assert.True(processed.IndexOf(includedId) < processed.IndexOf(rootId));
     }
 
     [Fact]
@@ -599,5 +672,74 @@ file sealed class TestIncludeDirectiveModel : IDirectiveModel<TestIncludeDirecti
     {
         reference = directive.Reference;
         return true;
+    }
+}
+
+public sealed record TestImportDirective(string Reference, System.Range Location);
+
+file sealed class TestImportDirectiveModel : IDirectiveModel<TestImportDirective>
+{
+    public System.Range GetLocation(TestImportDirective directive) => directive.Location;
+
+    public bool TryGetReference(TestImportDirective directive, out string reference)
+    {
+        reference = directive.Reference;
+        return true;
+    }
+}
+
+file sealed class ResolvedReferenceInliningMergeStrategy : IMergeStrategy<ReadOnlyMemory<char>, TestImportDirective, object>
+{
+    public ReadOnlyMemory<char> Merge(
+        IReadOnlyList<ResolvedResource<ReadOnlyMemory<char>, TestImportDirective>> orderedResources,
+        object userContext,
+        MergeContext<ReadOnlyMemory<char>, TestImportDirective> context)
+    {
+        ArgumentNullException.ThrowIfNull(orderedResources);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (orderedResources.Count == 0)
+        {
+            return ReadOnlyMemory<char>.Empty;
+        }
+
+        var root = orderedResources[^1];
+        var merged = root.Content.ToString();
+
+        for (var i = root.Directives.Count - 1; i >= 0; i--)
+        {
+            var key = new MergeContext<ReadOnlyMemory<char>, TestImportDirective>.ResolvedReferenceKey(root.Id, i);
+            if (!context.ResolvedReferences.TryGetValue(key, out var resolvedId))
+            {
+                throw new InvalidOperationException($"Resolved id missing for directive key {key}.");
+            }
+
+            if (!context.ResolvedCache.TryGetValue(resolvedId, out var resolvedResource))
+            {
+                throw new InvalidOperationException($"Resolved resource missing for id '{resolvedId.Path}'.");
+            }
+
+            var directive = root.Directives[i];
+            var location = context.DirectiveModel.GetLocation(directive);
+
+            var start = location.Start.GetOffset(merged.Length);
+            var end = location.End.GetOffset(merged.Length);
+
+            start = Math.Clamp(start, 0, merged.Length);
+            end = Math.Clamp(end, 0, merged.Length);
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            var includeText = resolvedResource.Content.ToString();
+
+            merged = string.Concat(
+                merged.AsSpan(0, start),
+                includeText,
+                merged.AsSpan(end));
+        }
+
+        return merged.AsMemory();
     }
 }

@@ -50,16 +50,15 @@ Deliverable
 ---
 
 Phase 4 — Regression Test (Custom Mapping Resolver)
-- Add an integration test that simulates the reported downstream scenario:
+- [x] Add an integration test that simulates the reported downstream scenario.
   - Root resource id: `domain:shaders/test.fsh`
   - Import directive reference string: `"shared.glsl"`
   - Resolver maps reference -> `domain:shaderincludes/shared.glsl` (non-path-like).
   - Included resource content is known marker text.
-- Verify:
-  - Dependency graph contains edge `domain:shaders/test.fsh -> domain:shaderincludes/shared.glsl`.
-  - `ProcessedResources` includes the include resource.
-  - Merge output inlines included content and does NOT emit a merge failure diagnostic for the import.
-  - (If a syntax-tree merge strategy exists/gets added) it uses the resolved id from `MergeContext` rather than re-deriving.
+- [x] Verify dependency graph + processed resources + merge behavior.
+  - Graph edge asserted via `DependencyGraph.GetDependencies(rootId)`.
+  - `ProcessedResources` contains both ids and orders dependency before root.
+  - Custom inlining merge strategy uses `MergeContext.ResolvedReferences` and would fail if merge re-derived ids.
 
 Deliverable
 - Passing test that would fail if merge re-derives ids.
