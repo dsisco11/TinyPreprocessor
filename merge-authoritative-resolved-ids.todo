@@ -1,0 +1,89 @@
+# Fix: Merge must use authoritative resolved ResourceId
+
+Context
+- Downstream syntax-tree merge is incorrectly re-deriving ResourceIds from raw directive references.
+- This breaks resolvers that map references using non-path semantics (e.g., domain prefixes, virtual folders).
+- This work is an intentional hard breaking change (no compatibility shims).
+
+Goal
+- Ensure merge stage can use the exact resolved dependency identity produced by the preprocessing pipeline (the `ResourceId` returned by `IResourceResolver`).
+- Provide a regression test where `reference != resolvedId.Path` (non-path-like mapping) and merge still succeeds.
+
+---
+
+Phase 1 — API Design (Breaking)
+- Decide the canonical data structure to carry directive -> resolved target identity into merge.
+  - Recommended: `ResolvedReferences` map stored on `MergeContext`.
+  - Key: `(requestingResourceId, directiveIndex)` (simple + deterministic) OR `(requestingResourceId, directiveSourceSpan)` (more stable if directives can be filtered/reordered).
+  - Value: resolved `ResourceId` (authoritative target identity).
+- Define behavior for unresolved directives:
+  - Option A: no map entry (lookup fails).
+  - Option B: map to `null` / sentinel (explicit unresolved).
+- Update public surface:
+  - Make `MergeContext` require the new mapping.
+  - If there are public constructors/factories, update them directly (breaking change allowed).
+
+Deliverable
+- Compiles with new required `MergeContext` API and clear semantics for missing entries.
+
+---
+
+Phase 2 — Pipeline Plumbing (Resolution → Map)
+- In `Preprocessor`, at the moment an import/include directive is successfully resolved:
+  - Record mapping from the directive (keyed by the chosen key scheme) to the returned `ResourceId`.
+  - Ensure this mapping uses the resolver’s returned `resource.Id` and not `reference`.
+- Thread the mapping into the `MergeContext` instance that is created for the merge stage.
+- Ensure mapping lines up with what the dependency graph uses:
+  - Graph edge should remain `requesting.Id -> resolved.Id`.
+
+Deliverable
+- `MergeContext` receives a fully-populated map for all resolved directives.
+
+---
+
+Phase 3 — Merge Strategy Integration
+- Update built-in merge strategies to accept the new `MergeContext` shape (even if unused).
+- If any merge logic currently derives ids from raw references:
+  - Replace with lookup into `MergeContext.ResolvedReferences`.
+  - When lookup fails, treat as unresolved and emit the appropriate merge diagnostic (do not silently guess).
+
+Deliverable
+- No code path in merge re-derives a target `ResourceId` from raw reference strings.
+
+---
+
+Phase 4 — Regression Test (Custom Mapping Resolver)
+- Add an integration test that simulates the reported downstream scenario:
+  - Root resource id: `domain:shaders/test.fsh`
+  - Import directive reference string: `"shared.glsl"`
+  - Resolver maps reference -> `domain:shaderincludes/shared.glsl` (non-path-like).
+  - Included resource content is known marker text.
+- Verify:
+  - Dependency graph contains edge `domain:shaders/test.fsh -> domain:shaderincludes/shared.glsl`.
+  - `ProcessedResources` includes the include resource.
+  - Merge output inlines included content and does NOT emit a merge failure diagnostic for the import.
+  - (If a syntax-tree merge strategy exists/gets added) it uses the resolved id from `MergeContext` rather than re-deriving.
+
+Deliverable
+- Passing test that would fail if merge re-derives ids.
+
+---
+
+Phase 5 — Diagnostics & Documentation
+- Ensure diagnostics remain accurate:
+  - Resolution failures should be reported by resolution diagnostics.
+  - Merge should only report missing resolved trees when the dependency truly wasn’t processed/available.
+- Add/update docs:
+  - Explain that merge strategies should treat `MergeContext.ResolvedReferences` as source of truth.
+  - Document the keying scheme and how to look up a directive’s resolved target id.
+
+Deliverable
+- Clear guidance for downstream merge strategy authors.
+
+---
+
+Definition of Done
+- Build succeeds.
+- Tests pass.
+- New integration test covers non-path-like resolver mapping.
+- Merge stage uses authoritative resolved `ResourceId` identity (no `reference`-based guessing).
