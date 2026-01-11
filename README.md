@@ -219,6 +219,12 @@ if (boundaryLocation is not null)
 
 ## Custom Merge Strategy
 
+### Merge identity
+
+If your merge strategy inlines/expands directives (e.g., `@import`, `#include`), use the authoritative dependency
+identity returned by your `IResourceResolver<TContent>`. TinyPreprocessor provides this mapping to merge via
+`MergeContext<TContent, TDirective>.ResolvedReferences`.
+
 Implement `IMergeStrategy<TContent, TDirective, TContext>` for custom output formatting:
 
 ```csharp
@@ -236,6 +242,11 @@ public sealed class JsonMergeStrategy : IMergeStrategy<ReadOnlyMemory<char>, Inc
         // Use offset-based segments for precise mappings:
         //   mergeContext.SourceMapBuilder.AddOffsetSegment(resourceId, generatedStartOffset, originalStartOffset, length)
         // Use mergeContext.Diagnostics to report issues
+
+        // If you need to inline/expand directives:
+        // - Use mergeContext.ResolvedReferences to map (requestingResourceId, directiveIndex) -> resolved dependency ResourceId
+        // - Then fetch the already-processed dependency content from mergeContext.ResolvedCache
+        // Do NOT re-derive ResourceIds from raw reference strings (resolvers may implement custom mapping).
 
         return ReadOnlyMemory<char>.Empty;
     }

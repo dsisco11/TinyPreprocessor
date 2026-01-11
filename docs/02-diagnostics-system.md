@@ -161,29 +161,26 @@ diagnostics = new DiagnosticCollection()
 result = await resolver.ResolveAsync(reference, currentResource, ct)
 if not result.IsSuccess:
     diagnostics.Add(result.Error)
-    
-// During merge
-// Merge strategies should only add diagnostics for merge-time concerns (e.g., directive placement rules,
-// unsupported constructs, or missing data needed to build output), not for reference resolution.
-    // Continue processing other directives
+// During cycle detection
+for each cycle in graph.DetectCycles():
+    diagnostics.Add(new CircularDependencyDiagnostic(cycle))
+```
 
 ### Resolution vs. Merge Responsibility
 
 TinyPreprocessor separates responsibilities between phases:
 
 - **Resolution diagnostics** (e.g., `TPP0100` `ResolutionFailedDiagnostic`) are emitted when
-    `IResourceResolver.ResolveAsync(reference, relativeTo)` cannot produce an `IResource`.
+  `IResourceResolver.ResolveAsync(reference, relativeTo)` cannot produce an `IResource`.
 - **Merge diagnostics** (e.g., `TPP0300` `NonWholeLineDirectiveDiagnostic`) are emitted when merge logic detects
-    issues while producing output.
+  issues while producing output.
+
+Merge strategies should only add diagnostics for merge-time concerns (e.g., directive placement rules, unsupported
+constructs, or missing data needed to build output), not for reference resolution.
 
 Merge strategies that inline/expand directives must use the authoritative resolved dependency identity provided via
-`MergeContext.ResolvedReferences`. They must not re-derive a `ResourceId` from the raw reference string using
-path heuristics, because resolvers may implement custom mapping.
-
-// During cycle detection
-for each cycle in graph.DetectCycles():
-    diagnostics.Add(new CircularDependencyDiagnostic(cycle))
-```
+`MergeContext.ResolvedReferences`. They must not re-derive a `ResourceId` from the raw reference string using path
+heuristics, because resolvers may implement custom mapping.
 
 ### Checking Results
 
