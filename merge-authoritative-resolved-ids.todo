@@ -40,10 +40,9 @@ Deliverable
 ---
 
 Phase 3 — Merge Strategy Integration
-- Update built-in merge strategies to accept the new `MergeContext` shape (even if unused).
-- If any merge logic currently derives ids from raw references:
-  - Replace with lookup into `MergeContext.ResolvedReferences`.
-  - When lookup fails, treat as unresolved and emit the appropriate merge diagnostic (do not silently guess).
+- [x] Update built-in merge strategies to accept the new `MergeContext` shape (even if unused).
+- [x] Ensure no merge logic derives ids from raw references.
+  - Confirmed: built-in merge strategy does not resolve/derive ids; downstream strategies should use `MergeContext.ResolvedReferences`.
 
 Deliverable
 - No code path in merge re-derives a target `ResourceId` from raw reference strings.
