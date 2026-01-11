@@ -65,9 +65,10 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
         var graph = new ResourceDependencyGraph();
         var cache = new Dictionary<ResourceId, ResolvedResource<TContent, TDirective>>();
         var sourceMapBuilder = new SourceMapBuilder();
+        var resolvedReferences = new Dictionary<MergeContext<TContent, TDirective>.ResolvedReferenceKey, ResourceId>();
 
         // Phase 1: Recursive resolution
-        await ResolveRecursiveAsync(root, depth: 0, options, diagnostics, graph, cache, ct);
+        await ResolveRecursiveAsync(root, depth: 0, options, diagnostics, graph, cache, resolvedReferences, ct);
 
         // Phase 2: Cycle detection
         DetectAndReportCycles(graph, diagnostics);
@@ -77,7 +78,6 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
 
         // Phase 4: Merge
         var resolvedCache = cache.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Resource);
-        var resolvedReferences = new Dictionary<MergeContext<TContent, TDirective>.ResolvedReferenceKey, ResourceId>();
 
         var mergeContext = new MergeContext<TContent, TDirective>(
             sourceMapBuilder,
@@ -115,6 +115,7 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
         DiagnosticCollection diagnostics,
         ResourceDependencyGraph graph,
         Dictionary<ResourceId, ResolvedResource<TContent, TDirective>> cache,
+        Dictionary<MergeContext<TContent, TDirective>.ResolvedReferenceKey, ResourceId> resolvedReferences,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -135,8 +136,9 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
         cache[resource.Id] = new ResolvedResource<TContent, TDirective>(resource, directives);
 
         // Process include directives
-        foreach (var directive in directives)
+        for (var directiveIndex = 0; directiveIndex < directives.Count; directiveIndex++)
         {
+            var directive = directives[directiveIndex];
             if (!_directiveModel.TryGetReference(directive, out var reference))
             {
                 continue;
@@ -197,6 +199,8 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
             // Add dependency to graph
             graph.AddDependency(resource.Id, result.Resource.Id);
 
+            resolvedReferences[new MergeContext<TContent, TDirective>.ResolvedReferenceKey(resource.Id, directiveIndex)] = result.Resource.Id;
+
             // Check deduplication
             if (options.DeduplicateIncludes && cache.ContainsKey(result.Resource.Id))
             {
@@ -211,6 +215,7 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
                 diagnostics,
                 graph,
                 cache,
+                resolvedReferences,
                 ct);
         }
     }

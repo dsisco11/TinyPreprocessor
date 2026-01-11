@@ -27,12 +27,12 @@ Deliverable
 ---
 
 Phase 2 — Pipeline Plumbing (Resolution → Map)
-- In `Preprocessor`, at the moment an import/include directive is successfully resolved:
-  - Record mapping from the directive (keyed by the chosen key scheme) to the returned `ResourceId`.
-  - Ensure this mapping uses the resolver’s returned `resource.Id` and not `reference`.
-- Thread the mapping into the `MergeContext` instance that is created for the merge stage.
-- Ensure mapping lines up with what the dependency graph uses:
-  - Graph edge should remain `requesting.Id -> resolved.Id`.
+- [x] In `Preprocessor`, at the moment an import/include directive is successfully resolved:
+  - Records mapping from `(requestingResourceId, directiveIndex)` to the returned `ResourceId`.
+  - Uses the resolver’s returned `resource.Id` (not `reference`).
+- [x] Thread the mapping into the `MergeContext` instance that is created for the merge stage.
+- [x] Ensure mapping lines up with what the dependency graph uses.
+  - Uses the same `result.Resource.Id` as the `graph.AddDependency(requesting, resolved)` call.
 
 Deliverable
 - `MergeContext` receives a fully-populated map for all resolved directives.
