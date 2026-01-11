@@ -147,7 +147,7 @@ public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStr
                 (start, end) = (end, start);
             }
 
-            if (!IsWholeLineDirective(content, start, end))
+            if (!IsWholeLineDirective(content, start, end, context, resource.Id, resource.Content))
             {
                 context.Diagnostics.Add(new NonWholeLineDirectiveDiagnostic(resource.Id, location));
             }
@@ -184,7 +184,74 @@ public sealed class ConcatenatingMergeStrategy<TDirective, TContext> : IMergeStr
         return coalesced;
     }
 
-    private static bool IsWholeLineDirective(ReadOnlySpan<char> content, int start, int end)
+    private static bool IsWholeLineDirective(
+        ReadOnlySpan<char> content,
+        int start,
+        int end,
+        MergeContext<ReadOnlyMemory<char>, TDirective> context,
+        ResourceId resourceId,
+        ReadOnlyMemory<char> contentMemory)
+    {
+        if (context.ContentBoundaryResolverProvider.TryGet<ReadOnlyMemory<char>, LineBoundary>(out var boundaryResolver))
+        {
+            return IsWholeLineDirectiveByLineBoundaries(content, start, end, boundaryResolver, resourceId, contentMemory);
+        }
+
+        return IsWholeLineDirectiveLegacyLf(content, start, end);
+    }
+
+    private static bool IsWholeLineDirectiveByLineBoundaries(
+        ReadOnlySpan<char> content,
+        int start,
+        int end,
+        IContentBoundaryResolver<ReadOnlyMemory<char>, LineBoundary> boundaryResolver,
+        ResourceId resourceId,
+        ReadOnlyMemory<char> contentMemory)
+    {
+        if ((uint)start > (uint)content.Length || (uint)end > (uint)content.Length)
+        {
+            return false;
+        }
+
+        var lineStart = 0;
+        foreach (var boundaryStart in boundaryResolver.ResolveOffsets(contentMemory, resourceId, startOffset: 0, endOffset: start + 1))
+        {
+            lineStart = boundaryStart;
+        }
+
+        var lineEnd = content.Length;
+        foreach (var boundaryStart in boundaryResolver.ResolveOffsets(contentMemory, resourceId, startOffset: start + 1, endOffset: content.Length))
+        {
+            lineEnd = boundaryStart;
+            break;
+        }
+
+        // Directive must not extend into the next line.
+        if (end > lineEnd)
+        {
+            return false;
+        }
+
+        for (var i = lineStart; i < start; i++)
+        {
+            if (!char.IsWhiteSpace(content[i]))
+            {
+                return false;
+            }
+        }
+
+        for (var i = end; i < lineEnd; i++)
+        {
+            if (!char.IsWhiteSpace(content[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsWholeLineDirectiveLegacyLf(ReadOnlySpan<char> content, int start, int end)
     {
         if ((uint)start > (uint)content.Length || (uint)end > (uint)content.Length)
         {

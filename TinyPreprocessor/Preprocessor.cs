@@ -28,33 +28,18 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
     private readonly IResourceResolver<TContent> _resolver;
     private readonly IMergeStrategy<TContent, TDirective, TContext> _mergeStrategy;
     private readonly IContentModel<TContent> _contentModel;
+    private readonly IContentBoundaryResolverProvider _contentBoundaryResolverProvider;
 
-    /// <summary>
-    /// Initializes a new instance of <see cref="Preprocessor{TContent, TDirective, TContext}"/>.
-    /// </summary>
-    /// <param name="parser">The directive parser for extracting directives from resources.</param>
-    /// <param name="directiveModel">The directive model for interpreting directive locations and dependency references.</param>
-    /// <param name="resolver">The resource resolver for resolving references.</param>
-    /// <param name="mergeStrategy">The merge strategy for combining resources.</param>
-    /// <param name="contentModel">The content model for interpreting offsets and slicing content.</param>
-    public Preprocessor(
-        IDirectiveParser<TContent, TDirective> parser,
-        IDirectiveModel<TDirective> directiveModel,
-        IResourceResolver<TContent> resolver,
-        IMergeStrategy<TContent, TDirective, TContext> mergeStrategy,
-        IContentModel<TContent> contentModel)
+    public Preprocessor(PreprocessorConfiguration<TContent, TDirective, TContext> config)
     {
-        ArgumentNullException.ThrowIfNull(parser);
-        ArgumentNullException.ThrowIfNull(directiveModel);
-        ArgumentNullException.ThrowIfNull(resolver);
-        ArgumentNullException.ThrowIfNull(mergeStrategy);
-        ArgumentNullException.ThrowIfNull(contentModel);
+        ArgumentNullException.ThrowIfNull(config);
 
-        _parser = parser;
-        _directiveModel = directiveModel;
-        _resolver = resolver;
-        _mergeStrategy = mergeStrategy;
-        _contentModel = contentModel;
+        _parser = config.DirectiveParser;
+        _directiveModel = config.DirectiveModel;
+        _resolver = config.ResourceResolver;
+        _mergeStrategy = config.MergeStrategy;
+        _contentModel = config.ContentModel;
+        _contentBoundaryResolverProvider = config.ContentBoundaryResolverProvider;
     }
 
     /// <summary>
@@ -98,7 +83,8 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
             diagnostics,
             resolvedCache,
             _directiveModel,
-            _contentModel);
+            _contentModel,
+            _contentBoundaryResolverProvider);
         var orderedResources = processingOrder
             .Where(id => cache.ContainsKey(id))
             .Select(id => cache[id])

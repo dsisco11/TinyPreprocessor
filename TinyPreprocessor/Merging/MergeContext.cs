@@ -17,12 +17,14 @@ public sealed class MergeContext<TContent, TDirective>
     /// <param name="resolvedCache">The cache of resolved resources.</param>
     /// <param name="directiveModel">The directive model for interpreting directive locations and references.</param>
     /// <param name="contentModel">The content model for interpreting offsets and slicing content.</param>
+    /// <param name="contentBoundaryResolverProvider">The provider for resolving logical boundaries within content.</param>
     public MergeContext(
         SourceMapBuilder sourceMapBuilder,
         DiagnosticCollection diagnostics,
         IReadOnlyDictionary<ResourceId, IResource<TContent>> resolvedCache,
         IDirectiveModel<TDirective> directiveModel,
-        IContentModel<TContent> contentModel)
+        IContentModel<TContent> contentModel,
+        IContentBoundaryResolverProvider? contentBoundaryResolverProvider = null)
     {
         ArgumentNullException.ThrowIfNull(sourceMapBuilder);
         ArgumentNullException.ThrowIfNull(diagnostics);
@@ -35,6 +37,7 @@ public sealed class MergeContext<TContent, TDirective>
         ResolvedCache = resolvedCache;
         DirectiveModel = directiveModel;
         ContentModel = contentModel;
+        ContentBoundaryResolverProvider = contentBoundaryResolverProvider ?? Core.ContentBoundaryResolverProvider.Empty;
     }
 
     /// <summary>
@@ -61,4 +64,9 @@ public sealed class MergeContext<TContent, TDirective>
     /// Gets the content model used to interpret offsets and slice content.
     /// </summary>
     public IContentModel<TContent> ContentModel { get; }
+
+    /// <summary>
+    /// Gets the provider for resolving logical boundaries within content.
+    /// </summary>
+    public IContentBoundaryResolverProvider ContentBoundaryResolverProvider { get; }
 }

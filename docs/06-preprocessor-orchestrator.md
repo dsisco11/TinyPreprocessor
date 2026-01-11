@@ -203,20 +203,30 @@ if resolution failed:
 
 ```
 // 1. Create components
-parser   = new CStyleIncludeParser()
-resolver = new FileSystemResolver("/project/src")
-merger   = new ConcatenatingMergeStrategy<object>()
+parser        = new IncludeParser()
+directiveModel= new IncludeDirectiveModel()
+resolver      = new FileSystemResolver("/project/src")
+merger        = new ConcatenatingMergeStrategy<IncludeDirective, object>()
+contentModel  = new ReadOnlyMemoryCharContentModel()
 
-// 2. Create preprocessor
-preprocessor = new Preprocessor<IncludeDirective, object>(parser, resolver, merger)
+// 2. Create configuration
+config = new PreprocessorConfiguration<ReadOnlyMemory<char>, IncludeDirective, object>(
+    parser,
+    directiveModel,
+    resolver,
+    merger,
+    contentModel)
 
-// 3. Load root resource
+// 3. Create preprocessor
+preprocessor = new Preprocessor<ReadOnlyMemory<char>, IncludeDirective, object>(config)
+
+// 4. Load root resource
 root = new Resource("main.c", ReadFile("/project/src/main.c"))
 
-// 4. Process
+// 5. Process
 result = await preprocessor.ProcessAsync(root, context: null)
 
-// 5. Check results
+// 6. Check results
 if result.Success:
     WriteFile("/project/out/bundle.c", result.Content)
 else:
