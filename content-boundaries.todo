@@ -50,20 +50,20 @@ Phase 2 - Content Boundary Abstractions (Core):
 
 Phase 3 - SourceMap + Boundary Composition Utilities:
   Phase 3.1 - Decide Composition Surface:
-    ☐ Add utility APIs (extension methods or helper types) that combine:
-      ☐ SourceMap (offset mapping)
-      ☐ IContentBoundaryResolver<TBoundary> (boundary offsets)
-    ☐ Define intended “line number from offset” workflow using a boundary type (e.g., LineBoundary marker)
+    ✔ Add utility APIs (extension methods or helper types) that combine:
+      ✔ SourceMap (offset mapping)
+      ✔ IContentBoundaryResolver<TContent, TBoundary> (boundary offsets)
+    ✔ Define intended “line number from offset” workflow using a boundary type (e.g., LineBoundary marker)
 
   Phase 3.2 - Implement Minimal Helpers:
-    ☐ Add a helper to compute boundary index within range (e.g., count boundaries < offset)
-    ☐ Support resolving both:
-      ☐ Generated-offset boundary index
-      ☐ Original-offset boundary index (via SourceMap GetSourceLocation)
+    ✔ Add a helper to compute boundary index within range (e.g., count boundaries < offset)
+    ✔ Support resolving both:
+      ✔ Generated-offset boundary index
+      ✔ Original-offset boundary index (via SourceMap.Query)
 
   Phase 3.3 - Tests:
-    ☐ Add unit tests for boundary range query integration
-    ☐ Add unit tests for offset -> boundary-index (line number) computation
+    ✔ Add unit tests for boundary range query integration
+    ✔ Add unit tests for offset -> boundary-index (line number) computation
 
 Phase 4 - Adoption in Text-Specific Features (Optional / Follow-up):
   Phase 4.1 - Replace Hard-Coded Newline Semantics:
