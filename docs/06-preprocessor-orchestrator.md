@@ -81,7 +81,7 @@ class Preprocessor<TContent, TDirective, TContext>
         graph ← new ResourceDependencyGraph()
         cache ← new Dictionary<ResourceId, ResolvedResource>()
         sourceMapBuilder ← new SourceMapBuilder()
-        resolvedReferences ← new Dictionary<(ResourceId, directiveIndex), ResourceId>()
+        resolvedReferences ← new Dictionary<MergeContext.ResolvedReferenceKey, ResourceId>()
 
         // Phase 1: Recursive resolution
         await ResolveRecursiveAsync(root, depth: 0, ...)

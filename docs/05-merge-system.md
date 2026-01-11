@@ -37,7 +37,7 @@ class MergeContext<TContent, TDirective>
         SourceMapBuilder : SourceMapBuilder   // for recording mappings
         Diagnostics      : DiagnosticCollection // for reporting issues
         ResolvedCache    : IReadOnlyDictionary<ResourceId, IResource<TContent>>  // for cross-referencing
-    ResolvedReferences : IReadOnlyDictionary<ResolvedReferenceKey, ResourceId> // directive occurrence -> resolved dependency id
+        ResolvedReferences : IReadOnlyDictionary<ResolvedReferenceKey, ResourceId> // directive occurrence -> resolved dependency id
         DirectiveModel   : IDirectiveModel<TDirective>  // for interpreting directive locations
         ContentModel     : IContentModel<TContent>  // for interpreting offsets + slicing content
 ```
@@ -61,6 +61,8 @@ dependency content. For these strategies, the **only** correct way to identify a
   - `requestingResourceId` is the id of the resource that contained the directive
   - `directiveIndex` is the zero-based index of the directive in that resource's parsed directive list
 - **Value**: the resolved target `ResourceId` returned by the resolver
+
+In code, the key type is `MergeContext<TContent, TDirective>.ResolvedReferenceKey`.
 
 If a directive failed to resolve, it has **no entry** in this map.
 
