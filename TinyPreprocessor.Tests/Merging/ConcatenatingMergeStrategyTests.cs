@@ -307,10 +307,13 @@ public sealed class ConcatenatingMergeStrategyTests
             ? new Dictionary<ResourceId, IResource<ReadOnlyMemory<char>>>()
             : resources.ToDictionary(r => r.Id, r => r.Resource);
 
+        var resolvedReferences = new Dictionary<MergeContext<ReadOnlyMemory<char>, TestDirective>.ResolvedReferenceKey, ResourceId>();
+
         return new MergeContext<ReadOnlyMemory<char>, TestDirective>(
             new SourceMapBuilder(),
             new DiagnosticCollection(),
             resolvedCache,
+            resolvedReferences,
             new TestDirectiveModel(),
             new ReadOnlyMemoryCharContentModel());
     }

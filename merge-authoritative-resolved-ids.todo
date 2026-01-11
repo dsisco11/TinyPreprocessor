@@ -12,16 +12,14 @@ Goal
 ---
 
 Phase 1 — API Design (Breaking)
-- Decide the canonical data structure to carry directive -> resolved target identity into merge.
-  - Recommended: `ResolvedReferences` map stored on `MergeContext`.
-  - Key: `(requestingResourceId, directiveIndex)` (simple + deterministic) OR `(requestingResourceId, directiveSourceSpan)` (more stable if directives can be filtered/reordered).
+- [x] Decide the canonical data structure to carry directive -> resolved target identity into merge.
+  - Chosen: `ResolvedReferences` map stored on `MergeContext`.
+  - Key: `(requestingResourceId, directiveIndex)` via `MergeContext<,>.ResolvedReferenceKey`.
   - Value: resolved `ResourceId` (authoritative target identity).
-- Define behavior for unresolved directives:
-  - Option A: no map entry (lookup fails).
-  - Option B: map to `null` / sentinel (explicit unresolved).
-- Update public surface:
-  - Make `MergeContext` require the new mapping.
-  - If there are public constructors/factories, update them directly (breaking change allowed).
+- [x] Define behavior for unresolved directives.
+  - Chosen: no map entry (lookup fails).
+- [x] Update public surface.
+  - `MergeContext` now requires the new mapping.
 
 Deliverable
 - Compiles with new required `MergeContext` API and clear semantics for missing entries.

@@ -77,11 +77,13 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
 
         // Phase 4: Merge
         var resolvedCache = cache.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Resource);
+        var resolvedReferences = new Dictionary<MergeContext<TContent, TDirective>.ResolvedReferenceKey, ResourceId>();
 
         var mergeContext = new MergeContext<TContent, TDirective>(
             sourceMapBuilder,
             diagnostics,
             resolvedCache,
+            resolvedReferences,
             _directiveModel,
             _contentModel,
             _contentBoundaryResolverProvider);
