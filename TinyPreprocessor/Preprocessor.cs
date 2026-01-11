@@ -43,29 +43,6 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
     }
 
     /// <summary>
-    /// Initializes a new instance of <see cref="Preprocessor{TContent, TDirective, TContext}"/>.
-    /// </summary>
-    /// <param name="parser">The directive parser for extracting directives from resources.</param>
-    /// <param name="directiveModel">The directive model for interpreting directive locations and dependency references.</param>
-    /// <param name="resolver">The resource resolver for resolving references.</param>
-    /// <param name="mergeStrategy">The merge strategy for combining resources.</param>
-    /// <param name="contentModel">The content model for interpreting offsets and slicing content.</param>
-    public Preprocessor(
-        IDirectiveParser<TContent, TDirective> parser,
-        IDirectiveModel<TDirective> directiveModel,
-        IResourceResolver<TContent> resolver,
-        IMergeStrategy<TContent, TDirective, TContext> mergeStrategy,
-        IContentModel<TContent> contentModel)
-        : this(new PreprocessorConfiguration<TContent, TDirective, TContext>(
-            parser,
-            directiveModel,
-            resolver,
-            mergeStrategy,
-            contentModel))
-    {
-    }
-
-    /// <summary>
     /// Processes a root resource and all its dependencies, producing merged output.
     /// </summary>
     /// <param name="root">The root resource to process.</param>
