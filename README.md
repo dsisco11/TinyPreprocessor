@@ -127,7 +127,13 @@ var resolver = new InMemoryResolver(files);
 var merger = new ConcatenatingMergeStrategy<IncludeDirective, object>();
 var contentModel = new ReadOnlyMemoryCharContentModel();
 var context = new object();
-var preprocessor = new Preprocessor<ReadOnlyMemory<char>, IncludeDirective, object>(parser, directiveModel, resolver, merger, contentModel);
+var config = new PreprocessorConfiguration<ReadOnlyMemory<char>, IncludeDirective, object>(
+    parser,
+    directiveModel,
+    resolver,
+    merger,
+    contentModel);
+var preprocessor = new Preprocessor<ReadOnlyMemory<char>, IncludeDirective, object>(config);
 var root = new Resource<ReadOnlyMemory<char>>("main.txt", files["main.txt"].AsMemory());
 
 var result = await preprocessor.ProcessAsync(root, context);

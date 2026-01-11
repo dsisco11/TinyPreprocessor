@@ -29,6 +29,17 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
     private readonly IMergeStrategy<TContent, TDirective, TContext> _mergeStrategy;
     private readonly IContentModel<TContent> _contentModel;
 
+    public Preprocessor(PreprocessorConfiguration<TContent, TDirective, TContext> config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        _parser = config.DirectiveParser;
+        _directiveModel = config.DirectiveModel;
+        _resolver = config.ResourceResolver;
+        _mergeStrategy = config.MergeStrategy;
+        _contentModel = config.ContentModel;
+    }
+
     /// <summary>
     /// Initializes a new instance of <see cref="Preprocessor{TContent, TDirective, TContext}"/>.
     /// </summary>
@@ -43,18 +54,13 @@ public sealed class Preprocessor<TContent, TDirective, TContext>
         IResourceResolver<TContent> resolver,
         IMergeStrategy<TContent, TDirective, TContext> mergeStrategy,
         IContentModel<TContent> contentModel)
+        : this(new PreprocessorConfiguration<TContent, TDirective, TContext>(
+            parser,
+            directiveModel,
+            resolver,
+            mergeStrategy,
+            contentModel))
     {
-        ArgumentNullException.ThrowIfNull(parser);
-        ArgumentNullException.ThrowIfNull(directiveModel);
-        ArgumentNullException.ThrowIfNull(resolver);
-        ArgumentNullException.ThrowIfNull(mergeStrategy);
-        ArgumentNullException.ThrowIfNull(contentModel);
-
-        _parser = parser;
-        _directiveModel = directiveModel;
-        _resolver = resolver;
-        _mergeStrategy = mergeStrategy;
-        _contentModel = contentModel;
     }
 
     /// <summary>

@@ -458,15 +458,15 @@ public sealed class PreprocessorIntegrationTests
         var resolver = new Mock<IResourceResolver<ReadOnlyMemory<char>>>();
         var mergeStrategy = new ConcatenatingMergeStrategy<TestIncludeDirective, object>();
 
-        // Setup parser to find #include directives
-        parser.Setup(p => p.Parse(It.IsAny<ReadOnlyMemory<char>>(), It.IsAny<ResourceId>()))
+        parser
+            .Setup(p => p.Parse(It.IsAny<ReadOnlyMemory<char>>(), It.IsAny<ResourceId>()))
             .Returns((ReadOnlyMemory<char> content, ResourceId _) =>
             {
-                var text = content.ToString();
                 var directives = new List<TestIncludeDirective>();
-
+                var text = content.ToString();
                 var lines = text.Split('\n');
                 var offset = 0;
+
                 foreach (var line in lines)
                 {
                     if (line.StartsWith("#include "))
@@ -480,12 +480,17 @@ public sealed class PreprocessorIntegrationTests
                 return directives;
             });
 
-        var preprocessor = new Preprocessor<ReadOnlyMemory<char>, TestIncludeDirective, object>(
+        var directiveModel = new TestIncludeDirectiveModel();
+        var contentModel = new ReadOnlyMemoryCharContentModel();
+
+        var config = new PreprocessorConfiguration<ReadOnlyMemory<char>, TestIncludeDirective, object>(
             parser.Object,
-            new TestIncludeDirectiveModel(),
+            directiveModel,
             resolver.Object,
             mergeStrategy,
-            new ReadOnlyMemoryCharContentModel());
+            contentModel);
+
+        var preprocessor = new Preprocessor<ReadOnlyMemory<char>, TestIncludeDirective, object>(config);
 
         return (preprocessor, resolver, parser);
     }
